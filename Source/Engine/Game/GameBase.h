@@ -1,4 +1,5 @@
 #include "GameWindow.h"
+#include "RenderSystem.h"
 
 using namespace Vultaik;
 
@@ -16,10 +17,20 @@ public:
 
 		OnInitialize();
 
+		m_renderSystem.Initialize(m_window.Handle(), m_window.ClientWidth(), m_window.ClientHeight());
+
+
+
+
 		while (m_window.IsRunning())
 		{
 			m_window.PumpMessages();
 			OnUpdate();
+
+			m_renderSystem.Update();
+			m_renderSystem.BeginFrame();
+			m_renderSystem.Render();
+			m_renderSystem.EndFrame();
 		}
 
 		OnDestroy();
@@ -34,4 +45,5 @@ protected:
 private:
 
 	GameWindow m_window;
+	RenderSystem m_renderSystem;
 };
