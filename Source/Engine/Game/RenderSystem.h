@@ -15,6 +15,7 @@ struct Vertex
 enum class ResourceType
 {
 	Structured,
+	Index,
 	Null,
 };
 
@@ -31,6 +32,7 @@ struct Resource
 struct Mesh2D
 {
 	Resource vertex;
+	Resource index;
 };
 
 class RenderSystem
@@ -68,14 +70,27 @@ public:
 		CompileShaderFromFile(L"../Assets/Shaders/Pixel.hlsl", "PS", "ps_5_0", &psBlob);
 		m_device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &m_pixelShader);
 
-		Vertex triangleVertices[] =
+		Vertex vertices[] =
 		{
-			{ {  0.0f,  0.9f, 0.0f, 1.0f }, { 1, 0, 0, 1 } },
-			{ {  0.5f, -0.5f, 0.0f, 1.0f }, { 0, 1, 0, 1 } },
-			{ { -0.5f, -0.5f, 0.0f, 1.0f }, { 0, 0, 1, 1 } }
+			{  -0.5f,  0.5f, 0.0f, 1.0f, // POSITION
+				0.9f, 0.0f, 0.0f, 1.0f},     // COLOR
+
+			{  0.5f, 0.5f, 0.0f, 1.0f, // POSITION
+				0.0f, 0.9f, 0.0f, 1.0f,},     // COLOR
+
+			{ 0.5f, -0.5f, 0.0f,1.0f,  // POSITION
+				0.0f, 0.0f, 0.9f, 1.0f, } ,     // COLOR
+
+			{  -0.5f, -0.5f, 0.0f, 1.0f,  0.0f, 0.0f, 0.9f, 1.0f,}
 		};
 
-		m_triangleMesh = CreateMesh(triangleVertices, sizeof(triangleVertices));
+		uint32_t indices[] =
+		{
+			0, 1, 2,
+			0, 2, 3
+		};
+
+		m_triangleMesh = CreateMesh(vertices, sizeof(vertices), indices, sizeof(indices));
 	}
 
 	void BeginFrame()
@@ -179,11 +194,34 @@ private:
 		return resource;
 	}
 
-	Mesh2D CreateMesh(void* data, uint32_t size)
+	Resource CreateIndexBuffer(const void* data, uint32_t stride, uint32_t count)
+	{
+		Resource resource{};
+		resource.type = ResourceType::Index;
+		resource.stride = stride;
+		resource.count = count;
+
+		D3D11_BUFFER_DESC desc{};
+		desc.ByteWidth = stride * count;
+		desc.Usage = D3D11_USAGE_DEFAULT;
+		desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_INDEX_BUFFER;
+		desc.MiscFlags = 0;
+		desc.StructureByteStride = 0;
+
+		D3D11_SUBRESOURCE_DATA initialData{};
+		initialData.pSysMem = data;
+		ID3D11Buffer* buffer = nullptr;
+		m_device->CreateBuffer(&desc, data ? &initialData : nullptr, (ID3D11Buffer**)&resource.resource);
+
+		return resource;
+	}
+
+	Mesh2D CreateMesh(void* verticesData, uint32_t verticesSize, void* indicesData, uint32_t indicesSize)
 	{
 		Mesh2D mesh{};
 
-		mesh.vertex = CreateStructuredBuffer(data, sizeof(Vertex), size / sizeof(Vertex));
+		mesh.vertex = CreateStructuredBuffer(verticesData, sizeof(Vertex), verticesSize / sizeof(Vertex));
+		mesh.index = CreateIndexBuffer(indicesData, sizeof(uint32_t), indicesSize / sizeof(uint32_t));
 
 		return mesh;
 	}
@@ -192,7 +230,8 @@ private:
 	{
 		m_cmd->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		m_cmd->VSSetShaderResources(0, 1, &mesh.vertex.srv);
-		m_cmd->Draw(mesh.vertex.count, 0);
+		m_cmd->IASetIndexBuffer((ID3D11Buffer*)mesh.index.resource, DXGI_FORMAT_R32_UINT, 0);
+		m_cmd->DrawIndexed(mesh.index.count, 0, 0);
 	}
 
 };
