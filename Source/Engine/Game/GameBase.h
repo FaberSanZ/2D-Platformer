@@ -13,7 +13,7 @@ public:
 	{
 		m_window.Initialize();
 		m_window.SetTitle(L"My game engine");
-		m_window.SetWindowSize(800, 600);
+		m_window.SetWindowSize(1640, 820);
 
 		OnInitialize();
 

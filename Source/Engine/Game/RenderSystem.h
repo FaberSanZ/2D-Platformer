@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <d3d11.h>
 #include <d3dcompiler.h>
+#include <DirectXMath.h>
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")
@@ -16,6 +17,7 @@ enum class ResourceType
 {
 	Structured,
 	Index,
+	Constant,
 	Null,
 };
 
@@ -91,6 +93,13 @@ public:
 		};
 
 		m_triangleMesh = CreateMesh(vertices, sizeof(vertices), indices, sizeof(indices));
+
+
+		// camera like
+		m_camera = CreateConstantBuffer(sizeof(DirectX::XMMATRIX), 1);
+
+
+
 	}
 
 	void BeginFrame()
@@ -113,7 +122,7 @@ public:
 		m_cmd->PSSetShader(m_pixelShader, nullptr, 0);
 		// Draw call
 		m_cmd->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
+		m_cmd->VSSetConstantBuffers(0, 1, (ID3D11Buffer**)&m_camera.resource);
 		DrawMesh(m_triangleMesh);
 	}
 
@@ -122,10 +131,34 @@ public:
 		m_swapChain->Present(1, 0);
 	}
 
+	float rotation = 0.0f;
+	float zoom = 1.0f;
 
 	void Update()
 	{
 
+		float halfHeight = 4.0f / zoom;
+		float asptectRatio = static_cast<float>(m_width) / static_cast<float>(m_height);
+		float halfWidth = halfHeight * asptectRatio;
+
+
+		DirectX::XMMATRIX model = DirectX::XMMatrixScaling(1.0f, 1.0f, 1.0f) * DirectX::XMMatrixRotationZ(0.5f * rotation);
+		DirectX::XMMATRIX view = DirectX::XMMatrixIdentity(); // future camera system
+		DirectX::XMMATRIX projection = DirectX::XMMatrixOrthographicOffCenterLH(-halfWidth, halfWidth, -halfHeight, halfHeight, 0.0f, 1.0f);
+		DirectX::XMMATRIX mvp = DirectX::XMMatrixTranspose(model * view * projection);
+
+		UpdateConstantBuffer(m_camera, &mvp);
+
+
+		// move to game logic and ecs, using for a this example
+ 		if (Vultaik::GameInput::IsKeyUp(Vultaik::GameInput::KeyCode::P))
+			rotation += 0.02f;
+
+		if (Vultaik::GameInput::IsKeyDown(Vultaik::GameInput::KeyCode::Up))
+			zoom += 0.02f;
+
+		if (Vultaik::GameInput::IsKeyDown(Vultaik::GameInput::KeyCode::Down))
+			zoom -= 0.02f;
 	}
 
 	void Destroy()
@@ -153,6 +186,7 @@ private:
 	ID3D11PixelShader* m_pixelShader = nullptr;
 
 	Mesh2D m_triangleMesh;
+	Resource m_camera;
 
 	void CompileShaderFromFile(const wchar_t* filePath, const char* entryPoint, const char* shaderModel, ID3DBlob** blob)
 	{
@@ -160,7 +194,7 @@ private:
 	}
 
 
-	Resource CreateStructuredBuffer(const void* data, uint32_t stride, uint32_t count, bool createView = true)
+	Resource CreateStructuredBuffer(const void* data, uint32_t stride, uint32_t count)
 	{
 		Resource resource{};
 
@@ -177,9 +211,6 @@ private:
 
 		D3D11_SUBRESOURCE_DATA initialData{};
 		initialData.pSysMem = data;
-
-		ID3D11Buffer* buffer = nullptr;
-
 		m_device->CreateBuffer(&desc, data ? &initialData : nullptr, (ID3D11Buffer**)&resource.resource);
 
 
@@ -204,7 +235,7 @@ private:
 		D3D11_BUFFER_DESC desc{};
 		desc.ByteWidth = stride * count;
 		desc.Usage = D3D11_USAGE_DEFAULT;
-		desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_INDEX_BUFFER;
+		desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
 		desc.MiscFlags = 0;
 		desc.StructureByteStride = 0;
 
@@ -214,6 +245,29 @@ private:
 		m_device->CreateBuffer(&desc, data ? &initialData : nullptr, (ID3D11Buffer**)&resource.resource);
 
 		return resource;
+	}
+
+	Resource CreateConstantBuffer(uint32_t stride, uint32_t count)
+	{
+		Resource resource{};
+		resource.type = ResourceType::Constant;
+		resource.stride = stride;
+		resource.count = count;
+
+		D3D11_BUFFER_DESC desc{};
+		desc.ByteWidth = stride * count;
+		desc.Usage = D3D11_USAGE_DEFAULT;
+		desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+		desc.MiscFlags = 0;
+		desc.StructureByteStride = 0;
+
+		m_device->CreateBuffer(&desc, nullptr, (ID3D11Buffer**)&resource.resource);
+		return resource;
+	}
+
+	void UpdateConstantBuffer(const Resource& resource, const void* data)
+	{
+		m_cmd->UpdateSubresource(resource.resource, 0, nullptr, data, 0, 0);
 	}
 
 	Mesh2D CreateMesh(void* verticesData, uint32_t verticesSize, void* indicesData, uint32_t indicesSize)
