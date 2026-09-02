@@ -20,8 +20,7 @@ public:
 		m_renderSystem.Initialize(m_window.Handle(), m_window.ClientWidth(), m_window.ClientHeight());
 
 
-
-
+		// Main game loop
 		while (m_window.IsRunning())
 		{
 			m_window.PumpMessages();
