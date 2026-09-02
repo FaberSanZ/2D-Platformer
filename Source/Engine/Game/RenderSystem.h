@@ -6,6 +6,33 @@
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")
 
+struct Vertex
+{
+	float position[4];
+	float color[4];
+};
+
+enum class ResourceType
+{
+	Structured,
+	Null,
+};
+
+struct Resource
+{
+	ID3D11Resource* resource = nullptr;
+	ID3D11ShaderResourceView* srv = nullptr;
+	ResourceType type = ResourceType::Null;
+
+	uint32_t stride = 0;
+	uint32_t count = 0;
+};
+
+struct Mesh2D
+{
+	Resource vertex;
+};
+
 class RenderSystem
 {
 public:
@@ -40,6 +67,15 @@ public:
 		ID3DBlob* psBlob = nullptr;
 		CompileShaderFromFile(L"../Assets/Shaders/Pixel.hlsl", "PS", "ps_5_0", &psBlob);
 		m_device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &m_pixelShader);
+
+		Vertex triangleVertices[] =
+		{
+			{ {  0.0f,  0.9f, 0.0f, 1.0f }, { 1, 0, 0, 1 } },
+			{ {  0.5f, -0.5f, 0.0f, 1.0f }, { 0, 1, 0, 1 } },
+			{ { -0.5f, -0.5f, 0.0f, 1.0f }, { 0, 0, 1, 1 } }
+		};
+
+		m_triangleMesh = CreateMesh(triangleVertices, sizeof(triangleVertices));
 	}
 
 	void BeginFrame()
@@ -62,7 +98,8 @@ public:
 		m_cmd->PSSetShader(m_pixelShader, nullptr, 0);
 		// Draw call
 		m_cmd->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		m_cmd->Draw(3, 0);
+
+		DrawMesh(m_triangleMesh);
 	}
 
 	void EndFrame()
@@ -100,10 +137,62 @@ private:
 	ID3D11VertexShader* m_vertexShader = nullptr;
 	ID3D11PixelShader* m_pixelShader = nullptr;
 
+	Mesh2D m_triangleMesh;
 
 	void CompileShaderFromFile(const wchar_t* filePath, const char* entryPoint, const char* shaderModel, ID3DBlob** blob)
 	{
 		D3DCompileFromFile(filePath, nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, entryPoint, shaderModel, 0, 0, blob, nullptr);
+	}
+
+
+	Resource CreateStructuredBuffer(const void* data, uint32_t stride, uint32_t count, bool createView = true)
+	{
+		Resource resource{};
+
+		resource.type = ResourceType::Structured;
+		resource.stride = stride;
+		resource.count = count;
+
+		D3D11_BUFFER_DESC desc{};
+		desc.ByteWidth = stride * count;
+		desc.Usage = D3D11_USAGE_DEFAULT;
+		desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+		desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+		desc.StructureByteStride = stride;
+
+		D3D11_SUBRESOURCE_DATA initialData{};
+		initialData.pSysMem = data;
+
+		ID3D11Buffer* buffer = nullptr;
+
+		m_device->CreateBuffer(&desc, data ? &initialData : nullptr, (ID3D11Buffer**)&resource.resource);
+
+
+		D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+		srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+		srvDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+		srvDesc.Buffer.FirstElement = 0;
+		srvDesc.Buffer.NumElements = count;
+		m_device->CreateShaderResourceView(resource.resource, &srvDesc, &resource.srv);
+		
+
+		return resource;
+	}
+
+	Mesh2D CreateMesh(void* data, uint32_t size)
+	{
+		Mesh2D mesh{};
+
+		mesh.vertex = CreateStructuredBuffer(data, sizeof(Vertex), size / sizeof(Vertex));
+
+		return mesh;
+	}
+
+	void DrawMesh(const Mesh2D& mesh)
+	{
+		m_cmd->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		m_cmd->VSSetShaderResources(0, 1, &mesh.vertex.srv);
+		m_cmd->Draw(mesh.vertex.count, 0);
 	}
 
 };
