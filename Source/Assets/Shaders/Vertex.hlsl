@@ -14,16 +14,18 @@ struct VS_OUTPUT
 
 cbuffer TransformBuffer : register(b0)
 {
-    float4x4 WorldViewProjection;
+    float4x4 ViewProjection;
 };
 
+StructuredBuffer<float4x4> Model : register(t1);
 
-VS_OUTPUT VS(uint vertexId : SV_VertexID)
+
+VS_OUTPUT VS(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID)
 {    
     Vertex vertex = Vertices[vertexId];
     
     VS_OUTPUT output;
-    output.Pos = mul(vertex.Pos, WorldViewProjection);
+    output.Pos = mul(mul(vertex.Pos, Model[instanceId]), ViewProjection);
     output.Color = vertex.color;
     
     return output;

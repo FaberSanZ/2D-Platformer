@@ -35,6 +35,7 @@ struct Mesh2D
 {
 	Resource vertex;
 	Resource index;
+	Resource instances;
 };
 
 class RenderSystem
@@ -92,7 +93,7 @@ public:
 			0, 2, 3
 		};
 
-		m_triangleMesh = CreateMesh(vertices, sizeof(vertices), indices, sizeof(indices));
+		m_triangleMesh = CreateMesh(vertices, sizeof(vertices), indices, sizeof(indices), 128 * 128);
 
 
 		// camera like
@@ -137,7 +138,7 @@ public:
 	void Update()
 	{
 
-		float halfHeight = 4.0f / zoom;
+		float halfHeight = 50.0f / zoom;
 		float asptectRatio = static_cast<float>(m_width) / static_cast<float>(m_height);
 		float halfWidth = halfHeight * asptectRatio;
 
@@ -145,20 +146,32 @@ public:
 		DirectX::XMMATRIX model = DirectX::XMMatrixScaling(1.0f, 1.0f, 1.0f) * DirectX::XMMatrixRotationZ(0.5f * rotation);
 		DirectX::XMMATRIX view = DirectX::XMMatrixIdentity(); // future camera system
 		DirectX::XMMATRIX projection = DirectX::XMMatrixOrthographicOffCenterLH(-halfWidth, halfWidth, -halfHeight, halfHeight, 0.0f, 1.0f);
-		DirectX::XMMATRIX mvp = DirectX::XMMatrixTranspose(model * view * projection);
+		DirectX::XMMATRIX mvp = DirectX::XMMatrixTranspose(view * projection);
 
-		UpdateConstantBuffer(m_camera, &mvp);
+		UpdateGpuData(m_camera, &mvp, 1);
 
 
-		// move to game logic and ecs, using for a this example
- 		if (Vultaik::GameInput::IsKeyUp(Vultaik::GameInput::KeyCode::P))
-			rotation += 0.02f;
+		std::vector<DirectX::XMMATRIX> instanceData;
+
+		for(uint32_t x = 0; x < 64; x++)
+		{
+			for (uint32_t y = 0; y < 64; y++)
+			{
+				float offsetX = static_cast<float>(x) - asptectRatio;
+				float offsetY = static_cast<float>(y) - asptectRatio;
+				DirectX::XMMATRIX model = DirectX::XMMatrixTranslation(offsetX, offsetY, 0.0f) * DirectX::XMMatrixRotationZ((offsetX * rotation) + offsetY);
+				instanceData.push_back(DirectX::XMMatrixTranspose(model));
+			}
+		}
+		UpdateGpuData(m_triangleMesh.instances, instanceData.data(), instanceData.size());
 
 		if (Vultaik::GameInput::IsKeyDown(Vultaik::GameInput::KeyCode::Up))
 			zoom += 0.02f;
 
 		if (Vultaik::GameInput::IsKeyDown(Vultaik::GameInput::KeyCode::Down))
 			zoom -= 0.02f;
+
+		rotation += 0.001f;
 	}
 
 	void Destroy()
@@ -194,7 +207,7 @@ private:
 	}
 
 
-	Resource CreateStructuredBuffer(const void* data, uint32_t stride, uint32_t count)
+	Resource CreateStructuredBuffer(uint32_t stride, uint32_t count)
 	{
 		Resource resource{};
 
@@ -208,11 +221,7 @@ private:
 		desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
 		desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
 		desc.StructureByteStride = stride;
-
-		D3D11_SUBRESOURCE_DATA initialData{};
-		initialData.pSysMem = data;
-		m_device->CreateBuffer(&desc, data ? &initialData : nullptr, (ID3D11Buffer**)&resource.resource);
-
+		m_device->CreateBuffer(&desc, nullptr, (ID3D11Buffer**)&resource.resource);
 
 		D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc{};
 		srvDesc.Format = DXGI_FORMAT_UNKNOWN;
@@ -224,6 +233,7 @@ private:
 
 		return resource;
 	}
+
 
 	Resource CreateIndexBuffer(const void* data, uint32_t stride, uint32_t count)
 	{
@@ -265,27 +275,50 @@ private:
 		return resource;
 	}
 
-	void UpdateConstantBuffer(const Resource& resource, const void* data)
+	void UpdateGpuData(const Resource& resource, const void* data, uint32_t count, uint32_t offset = 0)
 	{
-		m_cmd->UpdateSubresource(resource.resource, 0, nullptr, data, 0, 0);
+		if (resource.type == ResourceType::Constant)
+		{
+			m_cmd->UpdateSubresource(resource.resource, 0, nullptr, data, 0, 0);
+			return;
+		}
+
+		D3D11_BOX box{};
+		box.left = offset * resource.stride;
+		box.right = (offset + count) * resource.stride;
+		box.top = 0;
+		box.bottom = 1;
+		box.front = 0;
+		box.back = 1;
+
+		m_cmd->UpdateSubresource(resource.resource, 0, &box, data, 0, 0);
 	}
 
-	Mesh2D CreateMesh(void* verticesData, uint32_t verticesSize, void* indicesData, uint32_t indicesSize)
+	Mesh2D CreateMesh(void* verticesData, uint32_t verticesSize, void* indicesData, uint32_t indicesSize, uint32_t maxInstances)
 	{
 		Mesh2D mesh{};
 
-		mesh.vertex = CreateStructuredBuffer(verticesData, sizeof(Vertex), verticesSize / sizeof(Vertex));
+		mesh.vertex = CreateStructuredBuffer(sizeof(Vertex), verticesSize / sizeof(Vertex));
 		mesh.index = CreateIndexBuffer(indicesData, sizeof(uint32_t), indicesSize / sizeof(uint32_t));
+		mesh.instances = CreateStructuredBuffer(sizeof(DirectX::XMMATRIX), maxInstances);
+
+		UpdateGpuData(mesh.vertex, verticesData, mesh.vertex.count);
 
 		return mesh;
+	}
+
+	void UpdateMesh(const Mesh2D& mesh, const void* instanceData, uint32_t instanceCount)
+	{
+		//UpdateGpuData(mesh.instances, instanceData, instanceCount);
 	}
 
 	void DrawMesh(const Mesh2D& mesh)
 	{
 		m_cmd->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		m_cmd->VSSetShaderResources(0, 1, &mesh.vertex.srv);
+		m_cmd->VSSetShaderResources(1, 1, &mesh.instances.srv);
 		m_cmd->IASetIndexBuffer((ID3D11Buffer*)mesh.index.resource, DXGI_FORMAT_R32_UINT, 0);
-		m_cmd->DrawIndexed(mesh.index.count, 0, 0);
+		m_cmd->DrawIndexedInstanced(mesh.index.count, mesh.instances.count, 0, 0, 0);
 	}
 
 };
