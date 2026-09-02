@@ -11,6 +11,8 @@ public:
 
 	void Run()
 	{
+		CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+
 		m_window.Initialize();
 		m_window.SetTitle(L"My game engine");
 		m_window.SetWindowSize(1640, 820);
@@ -33,6 +35,8 @@ public:
 		}
 
 		OnDestroy();
+
+		CoUninitialize();
 	}
 
 protected:

@@ -3,14 +3,17 @@
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <DirectXMath.h>
+#include <wincodec.h>
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")
+#pragma comment(lib, "windowscodecs.lib")
 
 struct Vertex
 {
 	float position[4];
 	float color[4];
+	float uv[2];
 };
 
 enum class ResourceType
@@ -18,6 +21,7 @@ enum class ResourceType
 	Structured,
 	Index,
 	Constant,
+	Texture,
 	Null,
 };
 
@@ -35,6 +39,7 @@ struct Mesh2D
 {
 	Resource vertex;
 	Resource index;
+	Resource texture;
 	Resource instances;
 };
 
@@ -75,16 +80,10 @@ public:
 
 		Vertex vertices[] =
 		{
-			{  -0.5f,  0.5f, 0.0f, 1.0f, // POSITION
-				0.9f, 0.0f, 0.0f, 1.0f},     // COLOR
-
-			{  0.5f, 0.5f, 0.0f, 1.0f, // POSITION
-				0.0f, 0.9f, 0.0f, 1.0f,},     // COLOR
-
-			{ 0.5f, -0.5f, 0.0f,1.0f,  // POSITION
-				0.0f, 0.0f, 0.9f, 1.0f, } ,     // COLOR
-
-			{  -0.5f, -0.5f, 0.0f, 1.0f,  0.0f, 0.0f, 0.9f, 1.0f,}
+			{ -0.5f,  0.5f, 0.0f, 1.0f,   1.0f, 1.0f, 1.0f, 1.0f,   0.0f, 0.0f },
+			{  0.5f,  0.5f, 0.0f, 1.0f,   1.0f, 1.0f, 1.0f, 1.0f,   1.0f, 0.0f },
+			{  0.5f, -0.5f, 0.0f, 1.0f,   1.0f, 1.0f, 1.0f, 1.0f,   1.0f, 1.0f },
+			{ -0.5f, -0.5f, 0.0f, 1.0f,   1.0f, 1.0f, 1.0f, 1.0f,   0.0f, 1.0f }
 		};
 
 		uint32_t indices[] =
@@ -94,11 +93,19 @@ public:
 		};
 
 		m_triangleMesh = CreateMesh(vertices, sizeof(vertices), indices, sizeof(indices), 128 * 128);
-
+		m_triangleMesh.texture = CreateTextureWIC(L"../Assets/Textures/Orange/texture_10.png");
 
 		// camera like
 		m_camera = CreateConstantBuffer(sizeof(DirectX::XMMATRIX), 1);
 
+
+		D3D11_SAMPLER_DESC samplerDesc{};
+		samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+		samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+		samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+		samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+
+		m_device->CreateSamplerState(&samplerDesc, &m_sampler);
 
 
 	}
@@ -115,15 +122,15 @@ public:
 		viewport.MinDepth = 0.0f;
 		viewport.MaxDepth = 1.0f;
 		m_cmd->RSSetViewports(1, &viewport);
+
+		m_cmd->VSSetShader(m_vertexShader, nullptr, 0);
+		m_cmd->PSSetShader(m_pixelShader, nullptr, 0);
+		m_cmd->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		m_cmd->VSSetConstantBuffers(0, 1, (ID3D11Buffer**)&m_camera.resource);
 	}
 
 	void Render()
 	{
-		m_cmd->VSSetShader(m_vertexShader, nullptr, 0);
-		m_cmd->PSSetShader(m_pixelShader, nullptr, 0);
-		// Draw call
-		m_cmd->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		m_cmd->VSSetConstantBuffers(0, 1, (ID3D11Buffer**)&m_camera.resource);
 		DrawMesh(m_triangleMesh);
 	}
 
@@ -138,7 +145,7 @@ public:
 	void Update()
 	{
 
-		float halfHeight = 50.0f / zoom;
+		float halfHeight = 20.0f / zoom;
 		float asptectRatio = static_cast<float>(m_width) / static_cast<float>(m_height);
 		float halfWidth = halfHeight * asptectRatio;
 
@@ -153,9 +160,9 @@ public:
 
 		std::vector<DirectX::XMMATRIX> instanceData;
 
-		for(uint32_t x = 0; x < 64; x++)
+		for(uint32_t x = 0; x < 16; x++)
 		{
-			for (uint32_t y = 0; y < 64; y++)
+			for (uint32_t y = 0; y < 16; y++)
 			{
 				float offsetX = static_cast<float>(x) - asptectRatio;
 				float offsetY = static_cast<float>(y) - asptectRatio;
@@ -174,8 +181,63 @@ public:
 		rotation += 0.001f;
 	}
 
+
+	void UpdateGpuData(const Resource& resource, const void* data, uint32_t count, uint32_t offset = 0)
+	{
+		if (resource.type == ResourceType::Constant)
+		{
+			m_cmd->UpdateSubresource(resource.resource, 0, nullptr, data, 0, 0);
+			return;
+		}
+
+		D3D11_BOX box{};
+		box.left = offset * resource.stride;
+		box.right = (offset + count) * resource.stride;
+		box.top = 0;
+		box.bottom = 1;
+		box.front = 0;
+		box.back = 1;
+
+		m_cmd->UpdateSubresource(resource.resource, 0, &box, data, 0, 0);
+	}
+
+	Mesh2D CreateMesh(void* verticesData, uint32_t verticesSize, void* indicesData, uint32_t indicesSize, uint32_t maxInstances)
+	{
+		Mesh2D mesh{};
+
+		mesh.vertex = CreateStructuredBuffer(sizeof(Vertex), verticesSize / sizeof(Vertex));
+		mesh.index = CreateIndexBuffer(indicesData, sizeof(uint32_t), indicesSize / sizeof(uint32_t));
+		mesh.instances = CreateStructuredBuffer(sizeof(DirectX::XMMATRIX), maxInstances);
+
+		UpdateGpuData(mesh.vertex, verticesData, mesh.vertex.count);
+
+		return mesh;
+	}
+
+
+	void DrawMesh(const Mesh2D& mesh)
+	{
+		m_cmd->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		m_cmd->VSSetShaderResources(0, 1, &mesh.vertex.srv);
+		m_cmd->VSSetShaderResources(1, 1, &mesh.instances.srv);
+
+		m_cmd->PSSetShaderResources(0, 1, &mesh.texture.srv);
+		m_cmd->PSSetSamplers(0, 1, &m_sampler);
+
+		m_cmd->IASetIndexBuffer((ID3D11Buffer*)mesh.index.resource, DXGI_FORMAT_R32_UINT, 0);
+		m_cmd->DrawIndexedInstanced(mesh.index.count, mesh.instances.count, 0, 0, 0);
+	}
+
 	void Destroy()
 	{
+		if (m_camera.resource) m_camera.resource->Release();
+
+		if (m_sampler) m_sampler->Release();
+
+		if (m_vertexShader) m_vertexShader->Release();
+		if (m_pixelShader) m_pixelShader->Release();
+
 		if (m_renderTargetView) m_renderTargetView->Release();
 		if (m_backBuffer) m_backBuffer->Release();
 		if (m_swapChain) m_swapChain->Release();
@@ -197,6 +259,8 @@ private:
 
 	ID3D11VertexShader* m_vertexShader = nullptr;
 	ID3D11PixelShader* m_pixelShader = nullptr;
+
+	ID3D11SamplerState* m_sampler = nullptr;
 
 	Mesh2D m_triangleMesh;
 	Resource m_camera;
@@ -275,50 +339,69 @@ private:
 		return resource;
 	}
 
-	void UpdateGpuData(const Resource& resource, const void* data, uint32_t count, uint32_t offset = 0)
+
+
+
+
+	Resource CreateTextureWIC(const wchar_t* filePath)
 	{
-		if (resource.type == ResourceType::Constant)
-		{
-			m_cmd->UpdateSubresource(resource.resource, 0, nullptr, data, 0, 0);
-			return;
-		}
+		Resource resource{};
+		resource.type = ResourceType::Texture;
 
-		D3D11_BOX box{};
-		box.left = offset * resource.stride;
-		box.right = (offset + count) * resource.stride;
-		box.top = 0;
-		box.bottom = 1;
-		box.front = 0;
-		box.back = 1;
+		IWICImagingFactory* factory = nullptr;
+		IWICBitmapDecoder* decoder = nullptr;
+		IWICBitmapFrameDecode* frame = nullptr;
+		IWICFormatConverter* converter = nullptr;
 
-		m_cmd->UpdateSubresource(resource.resource, 0, &box, data, 0, 0);
-	}
+		CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory));
+		factory->CreateDecoderFromFilename(filePath, nullptr, GENERIC_READ, WICDecodeMetadataCacheOnLoad, &decoder);
+		decoder->GetFrame(0, &frame);
 
-	Mesh2D CreateMesh(void* verticesData, uint32_t verticesSize, void* indicesData, uint32_t indicesSize, uint32_t maxInstances)
-	{
-		Mesh2D mesh{};
+		UINT width = 0;
+		UINT height = 0;
+		frame->GetSize(&width, &height);
 
-		mesh.vertex = CreateStructuredBuffer(sizeof(Vertex), verticesSize / sizeof(Vertex));
-		mesh.index = CreateIndexBuffer(indicesData, sizeof(uint32_t), indicesSize / sizeof(uint32_t));
-		mesh.instances = CreateStructuredBuffer(sizeof(DirectX::XMMATRIX), maxInstances);
+		factory->CreateFormatConverter(&converter);
+		converter->Initialize(frame, GUID_WICPixelFormat32bppRGBA, WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeCustom);
 
-		UpdateGpuData(mesh.vertex, verticesData, mesh.vertex.count);
+		UINT stride = width * 4;
+		UINT imageSize = stride * height;
 
-		return mesh;
-	}
+		std::vector<uint8_t> pixels(imageSize);
+		converter->CopyPixels(nullptr, stride, imageSize, pixels.data());
 
-	void UpdateMesh(const Mesh2D& mesh, const void* instanceData, uint32_t instanceCount)
-	{
-		//UpdateGpuData(mesh.instances, instanceData, instanceCount);
-	}
+		D3D11_TEXTURE2D_DESC desc{};
+		desc.Width = width;
+		desc.Height = height;
+		desc.MipLevels = 1;
+		desc.ArraySize = 1;
+		desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		desc.SampleDesc.Count = 1;
+		desc.Usage = D3D11_USAGE_DEFAULT;
+		desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
 
-	void DrawMesh(const Mesh2D& mesh)
-	{
-		m_cmd->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		m_cmd->VSSetShaderResources(0, 1, &mesh.vertex.srv);
-		m_cmd->VSSetShaderResources(1, 1, &mesh.instances.srv);
-		m_cmd->IASetIndexBuffer((ID3D11Buffer*)mesh.index.resource, DXGI_FORMAT_R32_UINT, 0);
-		m_cmd->DrawIndexedInstanced(mesh.index.count, mesh.instances.count, 0, 0, 0);
+		D3D11_SUBRESOURCE_DATA data{};
+		data.pSysMem = pixels.data();
+		data.SysMemPitch = stride;
+
+		ID3D11Texture2D* texture = nullptr;
+		m_device->CreateTexture2D(&desc, &data, &texture);
+
+		resource.resource = texture;
+
+		D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+		srvDesc.Format = desc.Format;
+		srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+		srvDesc.Texture2D.MipLevels = 1;
+
+		m_device->CreateShaderResourceView(resource.resource, &srvDesc, &resource.srv);
+
+		if (converter) converter->Release();
+		if (frame) frame->Release();
+		if (decoder) decoder->Release();
+		if (factory) factory->Release();
+
+		return resource;
 	}
 
 };
