@@ -2,19 +2,12 @@
 #include <cstdint>
 #include <d3d11.h>
 #include <d3dcompiler.h>
-#include <DirectXMath.h>
 #include <wincodec.h>
+#include "Shapes2D.h"
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")
 #pragma comment(lib, "windowscodecs.lib")
-
-struct Vertex
-{
-	float position[4];
-	float color[4];
-	float uv[2];
-};
 
 enum class ResourceType
 {
@@ -78,22 +71,6 @@ public:
 		CompileShaderFromFile(L"../Assets/Shaders/Pixel.hlsl", "PS", "ps_5_0", &psBlob);
 		m_device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &m_pixelShader);
 
-		Vertex vertices[] =
-		{
-			{ -0.5f,  0.5f, 0.0f, 1.0f,   1.0f, 1.0f, 1.0f, 1.0f,   0.0f, 0.0f },
-			{  0.5f,  0.5f, 0.0f, 1.0f,   1.0f, 1.0f, 1.0f, 1.0f,   1.0f, 0.0f },
-			{  0.5f, -0.5f, 0.0f, 1.0f,   1.0f, 1.0f, 1.0f, 1.0f,   1.0f, 1.0f },
-			{ -0.5f, -0.5f, 0.0f, 1.0f,   1.0f, 1.0f, 1.0f, 1.0f,   0.0f, 1.0f }
-		};
-
-		uint32_t indices[] =
-		{
-			0, 1, 2,
-			0, 2, 3
-		};
-
-		m_triangleMesh = CreateMesh(vertices, sizeof(vertices), indices, sizeof(indices), 128 * 128);
-		m_triangleMesh.texture = CreateTextureWIC(L"../Assets/Textures/Orange/texture_10.png");
 
 		// camera like
 		m_camera = CreateConstantBuffer(sizeof(DirectX::XMMATRIX), 1);
@@ -131,7 +108,6 @@ public:
 
 	void Render()
 	{
-		DrawMesh(m_triangleMesh);
 	}
 
 	void EndFrame()
@@ -139,46 +115,21 @@ public:
 		m_swapChain->Present(1, 0);
 	}
 
-	float rotation = 0.0f;
-	float zoom = 1.0f;
 
 	void Update()
 	{
 
-		float halfHeight = 20.0f / zoom;
+		float halfHeight = 2.0f;
 		float asptectRatio = static_cast<float>(m_width) / static_cast<float>(m_height);
 		float halfWidth = halfHeight * asptectRatio;
 
 
-		DirectX::XMMATRIX model = DirectX::XMMatrixScaling(1.0f, 1.0f, 1.0f) * DirectX::XMMatrixRotationZ(0.5f * rotation);
 		DirectX::XMMATRIX view = DirectX::XMMatrixIdentity(); // future camera system
 		DirectX::XMMATRIX projection = DirectX::XMMatrixOrthographicOffCenterLH(-halfWidth, halfWidth, -halfHeight, halfHeight, 0.0f, 1.0f);
-		DirectX::XMMATRIX mvp = DirectX::XMMatrixTranspose(view * projection);
+		DirectX::XMMATRIX vp = DirectX::XMMatrixTranspose(view * projection);
 
-		UpdateGpuData(m_camera, &mvp, 1);
+		UpdateGpuData(m_camera, &vp, 1);
 
-
-		std::vector<DirectX::XMMATRIX> instanceData;
-
-		for(uint32_t x = 0; x < 16; x++)
-		{
-			for (uint32_t y = 0; y < 16; y++)
-			{
-				float offsetX = static_cast<float>(x) - asptectRatio;
-				float offsetY = static_cast<float>(y) - asptectRatio;
-				DirectX::XMMATRIX model = DirectX::XMMatrixTranslation(offsetX, offsetY, 0.0f) * DirectX::XMMatrixRotationZ((offsetX * rotation) + offsetY);
-				instanceData.push_back(DirectX::XMMatrixTranspose(model));
-			}
-		}
-		UpdateGpuData(m_triangleMesh.instances, instanceData.data(), instanceData.size());
-
-		if (Vultaik::GameInput::IsKeyDown(Vultaik::GameInput::KeyCode::Up))
-			zoom += 0.02f;
-
-		if (Vultaik::GameInput::IsKeyDown(Vultaik::GameInput::KeyCode::Down))
-			zoom -= 0.02f;
-
-		rotation += 0.001f;
 	}
 
 
@@ -201,13 +152,17 @@ public:
 		m_cmd->UpdateSubresource(resource.resource, 0, &box, data, 0, 0);
 	}
 
-	Mesh2D CreateMesh(void* verticesData, uint32_t verticesSize, void* indicesData, uint32_t indicesSize, uint32_t maxInstances)
+	Mesh2D CreateMesh(void* verticesData, uint32_t verticesSize, void* indicesData, uint32_t indicesSize, uint32_t maxInstances, const wchar_t* filePath)
 	{
 		Mesh2D mesh{};
 
-		mesh.vertex = CreateStructuredBuffer(sizeof(Vertex), verticesSize / sizeof(Vertex));
+		mesh.vertex = CreateStructuredBuffer(sizeof(Shapes2D::Vertex), verticesSize / sizeof(Shapes2D::Vertex));
 		mesh.index = CreateIndexBuffer(indicesData, sizeof(uint32_t), indicesSize / sizeof(uint32_t));
 		mesh.instances = CreateStructuredBuffer(sizeof(DirectX::XMMATRIX), maxInstances);
+
+		mesh.texture = CreateTextureWIC(filePath);
+
+
 
 		UpdateGpuData(mesh.vertex, verticesData, mesh.vertex.count);
 
@@ -262,7 +217,8 @@ private:
 
 	ID3D11SamplerState* m_sampler = nullptr;
 
-	Mesh2D m_triangleMesh;
+
+
 	Resource m_camera;
 
 	void CompileShaderFromFile(const wchar_t* filePath, const char* entryPoint, const char* shaderModel, ID3DBlob** blob)
@@ -338,8 +294,6 @@ private:
 		m_device->CreateBuffer(&desc, nullptr, (ID3D11Buffer**)&resource.resource);
 		return resource;
 	}
-
-
 
 
 
