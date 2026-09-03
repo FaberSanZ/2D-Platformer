@@ -123,8 +123,9 @@ private:
 
 		for (auto [entity, transform, mesh] : view_mesh.each())
 		{
-			DirectX::XMMATRIX model = DirectX::XMMatrixTranslation(transform.position.x, transform.position.y, transform.position.z);
-			model = DirectX::XMMatrixTranspose(model);
+			DirectX::XMMATRIX pos = DirectX::XMMatrixTranslation(transform.position.x, transform.position.y, transform.position.z);
+			DirectX::XMMATRIX rotation = DirectX::XMMatrixRotationZ(transform.rotation);
+			DirectX::XMMATRIX model = DirectX::XMMatrixTranspose(rotation * pos);
 
 			switch (mesh.shapeType)
 			{

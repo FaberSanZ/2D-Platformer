@@ -59,8 +59,30 @@ public:
 
 		D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION ,&swapChainDesc, &m_swapChain, &m_device, nullptr, &m_cmd);
 
+
+		m_device->CheckMultisampleQualityLevels(DXGI_FORMAT_R8G8B8A8_UNORM, m_msaaSamples, &m_msaaQuality);
+
+		if (m_msaaQuality == 0)
+			m_msaaSamples = 1;
+
 		m_swapChain->GetBuffer(0, __uuidof(ID3D11Resource), (void**)&m_backBuffer);	
 		m_device->CreateRenderTargetView(m_backBuffer, nullptr, &m_renderTargetView);
+
+
+
+		D3D11_TEXTURE2D_DESC msaaDesc{};
+		msaaDesc.Width = width;
+		msaaDesc.Height = height;
+		msaaDesc.MipLevels = 1;
+		msaaDesc.ArraySize = 1;
+		msaaDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		msaaDesc.SampleDesc.Count = m_msaaSamples;
+		msaaDesc.SampleDesc.Quality = m_msaaSamples > 1 ? m_msaaQuality - 1 : 0;
+		msaaDesc.Usage = D3D11_USAGE_DEFAULT;
+		msaaDesc.BindFlags = D3D11_BIND_RENDER_TARGET;
+
+		m_device->CreateTexture2D(&msaaDesc, nullptr, &m_msaaRenderTarget);
+		m_device->CreateRenderTargetView(m_msaaRenderTarget, nullptr, &m_msaaRenderTargetView);
 
 
 		ID3DBlob* vsBlob = nullptr;
@@ -90,8 +112,11 @@ public:
 	void BeginFrame()
 	{
 		float clearColor[4] = { 0.2f, 0.3f, 0.3f, 1.0f };
-		m_cmd->ClearRenderTargetView(m_renderTargetView, clearColor);
-		m_cmd->OMSetRenderTargets(1, &m_renderTargetView, nullptr);
+		//m_cmd->ClearRenderTargetView(m_renderTargetView, clearColor);
+		//m_cmd->OMSetRenderTargets(1, &m_renderTargetView, nullptr);
+
+		m_cmd->ClearRenderTargetView(m_msaaRenderTargetView, clearColor);
+		m_cmd->OMSetRenderTargets(1, &m_msaaRenderTargetView, nullptr);
 
 		D3D11_VIEWPORT viewport = {};
 		viewport.Width = m_width;
@@ -112,6 +137,11 @@ public:
 
 	void EndFrame()
 	{
+		ID3D11RenderTargetView* nullRenderTarget = nullptr;
+		m_cmd->OMSetRenderTargets(1, &nullRenderTarget, nullptr);
+
+		m_cmd->ResolveSubresource(m_backBuffer, 0, m_msaaRenderTarget, 0, DXGI_FORMAT_R8G8B8A8_UNORM);
+
 		m_swapChain->Present(1, 0);
 	}
 
@@ -211,6 +241,13 @@ private:
 
 	IDXGISwapChain* m_swapChain = nullptr;
 	ID3D11Resource* m_backBuffer = nullptr;
+
+	ID3D11Texture2D* m_msaaRenderTarget = nullptr;
+	ID3D11RenderTargetView* m_msaaRenderTargetView = nullptr;
+
+	uint32_t m_msaaSamples = 4;
+	uint32_t m_msaaQuality = 0;
+
 
 	ID3D11VertexShader* m_vertexShader = nullptr;
 	ID3D11PixelShader* m_pixelShader = nullptr;

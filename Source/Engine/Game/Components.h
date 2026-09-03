@@ -6,6 +6,7 @@
 struct TransformComponent
 {
 	DirectX::XMFLOAT3 position;
+	float rotation;
 };
 enum class ShapeType
 {
