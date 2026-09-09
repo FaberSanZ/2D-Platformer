@@ -59,7 +59,6 @@ public:
 
 		D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION ,&swapChainDesc, &m_swapChain, &m_device, nullptr, &m_cmd);
 
-
 		m_device->CheckMultisampleQualityLevels(DXGI_FORMAT_R8G8B8A8_UNORM, m_msaaSamples, &m_msaaQuality);
 
 		if (m_msaaQuality == 0)
@@ -67,7 +66,6 @@ public:
 
 		m_swapChain->GetBuffer(0, __uuidof(ID3D11Resource), (void**)&m_backBuffer);	
 		m_device->CreateRenderTargetView(m_backBuffer, nullptr, &m_renderTargetView);
-
 
 
 		D3D11_TEXTURE2D_DESC msaaDesc{};
@@ -93,10 +91,8 @@ public:
 		CompileShaderFromFile(L"../Assets/Shaders/Pixel.hlsl", "PS", "ps_5_0", &psBlob);
 		m_device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &m_pixelShader);
 
-
 		// camera like
 		m_camera = CreateConstantBuffer(sizeof(DirectX::XMMATRIX), 1);
-
 
 		D3D11_SAMPLER_DESC samplerDesc{};
 		samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
@@ -105,20 +101,11 @@ public:
 		samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
 
 		m_device->CreateSamplerState(&samplerDesc, &m_sampler);
-
-
 	}
 
 	void BeginFrame()
 	{
-		float clearColor[4] =
-		{
-			0.9294f,
-			0.8824f,
-			0.8275f,
-			1.0f
-		};
-
+		float clearColor[4] = { 0.9294f,0.8824f,0.8275f,1.0f };
 		m_cmd->ClearRenderTargetView(m_msaaRenderTargetView, clearColor);
 		m_cmd->OMSetRenderTargets(1, &m_msaaRenderTargetView, nullptr);
 
@@ -144,29 +131,22 @@ public:
 	{
 		ID3D11RenderTargetView* nullRenderTarget = nullptr;
 		m_cmd->OMSetRenderTargets(1, &nullRenderTarget, nullptr);
-
 		m_cmd->ResolveSubresource(m_backBuffer, 0, m_msaaRenderTarget, 0, DXGI_FORMAT_R8G8B8A8_UNORM);
-
 		m_swapChain->Present(1, 0);
 	}
-	
 
 	void Update()
 	{
-
-		float halfHeight = 2.0f;
+		float halfHeight = 5.0f;
 		float asptectRatio = static_cast<float>(m_width) / static_cast<float>(m_height);
 		float halfWidth = halfHeight * asptectRatio;
-
 
 		DirectX::XMMATRIX view = DirectX::XMMatrixIdentity(); // future camera system
 		DirectX::XMMATRIX projection = DirectX::XMMatrixOrthographicOffCenterLH(-halfWidth, halfWidth, -halfHeight, halfHeight, 0.0f, 1.0f);
 		DirectX::XMMATRIX vp = DirectX::XMMatrixTranspose(view * projection);
 
 		UpdateGpuData(m_camera, &vp, 1);
-
 	}
-
 
 	void UpdateGpuData(const Resource& resource, const void* data, uint32_t count, uint32_t offset = 0)
 	{
@@ -194,27 +174,19 @@ public:
 		mesh.vertex = CreateStructuredBuffer(sizeof(Shapes2D::Vertex), verticesSize / sizeof(Shapes2D::Vertex));
 		mesh.index = CreateIndexBuffer(indicesData, sizeof(uint32_t), indicesSize / sizeof(uint32_t));
 		mesh.instances = CreateStructuredBuffer(sizeof(DirectX::XMMATRIX), maxInstances);
-
 		mesh.texture = CreateTextureWIC(filePath);
 
-
-
 		UpdateGpuData(mesh.vertex, verticesData, mesh.vertex.count);
-
 		return mesh;
 	}
-
 
 	void DrawMesh(const Mesh2D& mesh)
 	{
 		m_cmd->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
 		m_cmd->VSSetShaderResources(0, 1, &mesh.vertex.srv);
 		m_cmd->VSSetShaderResources(1, 1, &mesh.instances.srv);
-
 		m_cmd->PSSetShaderResources(0, 1, &mesh.texture.srv);
 		m_cmd->PSSetSamplers(0, 1, &m_sampler);
-
 		m_cmd->IASetIndexBuffer((ID3D11Buffer*)mesh.index.resource, DXGI_FORMAT_R32_UINT, 0);
 		m_cmd->DrawIndexedInstanced(mesh.index.count, mesh.instances.count, 0, 0, 0);
 	}
@@ -222,12 +194,9 @@ public:
 	void Destroy()
 	{
 		if (m_camera.resource) m_camera.resource->Release();
-
 		if (m_sampler) m_sampler->Release();
-
 		if (m_vertexShader) m_vertexShader->Release();
 		if (m_pixelShader) m_pixelShader->Release();
-
 		if (m_renderTargetView) m_renderTargetView->Release();
 		if (m_backBuffer) m_backBuffer->Release();
 		if (m_swapChain) m_swapChain->Release();
@@ -239,27 +208,18 @@ public:
 private:
 	uint32_t m_width;
 	uint32_t m_height;
-
+	uint32_t m_msaaSamples = 4;
+	uint32_t m_msaaQuality = 0;
 	ID3D11Device* m_device = nullptr;
 	ID3D11DeviceContext* m_cmd = nullptr;
 	ID3D11RenderTargetView* m_renderTargetView = nullptr;
-
 	IDXGISwapChain* m_swapChain = nullptr;
 	ID3D11Resource* m_backBuffer = nullptr;
-
 	ID3D11Texture2D* m_msaaRenderTarget = nullptr;
 	ID3D11RenderTargetView* m_msaaRenderTargetView = nullptr;
-
-	uint32_t m_msaaSamples = 4;
-	uint32_t m_msaaQuality = 0;
-
-
 	ID3D11VertexShader* m_vertexShader = nullptr;
 	ID3D11PixelShader* m_pixelShader = nullptr;
-
 	ID3D11SamplerState* m_sampler = nullptr;
-
-
 
 	Resource m_camera;
 
@@ -268,11 +228,9 @@ private:
 		D3DCompileFromFile(filePath, nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, entryPoint, shaderModel, 0, 0, blob, nullptr);
 	}
 
-
 	Resource CreateStructuredBuffer(uint32_t stride, uint32_t count)
 	{
 		Resource resource{};
-
 		resource.type = ResourceType::Structured;
 		resource.stride = stride;
 		resource.count = count;
@@ -291,11 +249,9 @@ private:
 		srvDesc.Buffer.FirstElement = 0;
 		srvDesc.Buffer.NumElements = count;
 		m_device->CreateShaderResourceView(resource.resource, &srvDesc, &resource.srv);
-		
 
 		return resource;
 	}
-
 
 	Resource CreateIndexBuffer(const void* data, uint32_t stride, uint32_t count)
 	{
@@ -336,8 +292,6 @@ private:
 		m_device->CreateBuffer(&desc, nullptr, (ID3D11Buffer**)&resource.resource);
 		return resource;
 	}
-
-
 
 	Resource CreateTextureWIC(const wchar_t* filePath)
 	{
@@ -399,5 +353,4 @@ private:
 
 		return resource;
 	}
-
 };

@@ -26,8 +26,17 @@ struct MeshComponent
 	ShapeType shapeType;
 };
 
+enum class BodyType
+{
+	Static,
+	Kinematic,
+	Dynamic
+};
+
+
 struct RigidBodyComponent
 {
+	BodyType type = BodyType::Static;
 	DirectX::XMFLOAT2 position;
 	DirectX::XMFLOAT2 linearVelocity;
 	DirectX::XMFLOAT2 linearAcceleration;

@@ -14,15 +14,27 @@ public:
 		auto view = registry.view<RigidBodyComponent, TransformComponent>();
 		for (auto [entity, body, transform] : view.each())
 		{
-			const float accelerationX = body.linearAcceleration.x + m_gravity.x;
-			const float accelerationY = body.linearAcceleration.y + m_gravity.y;
+			// Only dynamic bodies respond to acceleration and gravity.
+			if (body.type == BodyType::Dynamic)
+			{
+				const float accelerationX = body.linearAcceleration.x + m_gravity.x;
+				const float accelerationY = body.linearAcceleration.y + m_gravity.y;
 
-			// Update velocity from acceleration.
-			body.linearVelocity.x += accelerationX * deltaTime;
-			body.linearVelocity.y += accelerationY * deltaTime;
+				// Update velocity from acceleration.
+				body.linearVelocity.x += accelerationX * deltaTime;
+				body.linearVelocity.y += accelerationY * deltaTime;
+			}
 
-			body.position.x += body.linearVelocity.x * deltaTime;
-			body.position.y += body.linearVelocity.y * deltaTime;
+
+			// Dynamic and kinematic bodies move according to their velocity.
+			if(body.type != BodyType::Static)
+			{
+				body.position.x += body.linearVelocity.x * deltaTime;
+				body.position.y += body.linearVelocity.y * deltaTime;
+			}
+
+
+
 
 			// Synchronize the render transform.
 			transform.position.x = body.position.x;
