@@ -15,9 +15,9 @@ protected:
             auto entity = registry.create();
 
 			RigidBodyComponent body;
-			body.position = { -1.8f, 0.0f };
+			body.position = { 0.0f, 1.5f };
 			body.linearVelocity = { 0.5f, 0.0f };
-            body.linearAcceleration = { 0.5f, 0.0f };
+            body.linearAcceleration = { 0.0f, 0.0f };
 
             registry.emplace<RigidBodyComponent>(entity, body);
             registry.emplace<MeshComponent>(entity, ShapeType::Circle);

@@ -14,9 +14,12 @@ public:
 		auto view = registry.view<RigidBodyComponent, TransformComponent>();
 		for (auto [entity, body, transform] : view.each())
 		{
+			const float accelerationX = body.linearAcceleration.x + m_gravity.x;
+			const float accelerationY = body.linearAcceleration.y + m_gravity.y;
+
 			// Update velocity from acceleration.
-			body.linearVelocity.x += body.linearAcceleration.x * deltaTime;
-			body.linearVelocity.y += body.linearAcceleration.y * deltaTime;
+			body.linearVelocity.x += accelerationX * deltaTime;
+			body.linearVelocity.y += accelerationY * deltaTime;
 
 			body.position.x += body.linearVelocity.x * deltaTime;
 			body.position.y += body.linearVelocity.y * deltaTime;
@@ -26,6 +29,10 @@ public:
 			transform.position.y = body.position.y;
 		}
 	}
+	
+private:
+
+	DirectX::XMFLOAT2 m_gravity = { 0.0f, -9.81f * 0.1f };
 
 
 };
