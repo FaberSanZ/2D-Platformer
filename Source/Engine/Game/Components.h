@@ -25,3 +25,9 @@ struct MeshComponent
 {
 	ShapeType shapeType;
 };
+
+struct RigidBodyComponent
+{
+	DirectX::XMFLOAT2 position;
+	DirectX::XMFLOAT2 linearVelocity;
+};
