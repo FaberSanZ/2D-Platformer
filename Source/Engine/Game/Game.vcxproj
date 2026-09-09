@@ -147,7 +147,9 @@
   <ItemGroup>
     <ClInclude Include="Components.h" />
     <ClInclude Include="GameBase.h" />
+    <ClInclude Include="GameTime.h" />
     <ClInclude Include="GameWindow.h" />
+    <ClInclude Include="PhysicsSystem.h" />
     <ClInclude Include="RenderSystem.h" />
     <ClInclude Include="Shapes2D.h" />
   </ItemGroup>

@@ -13,19 +13,14 @@ protected:
 
         {
             auto entity = registry.create();
-            registry.emplace<MeshComponent>(entity, ShapeType::RoundedRectangle);
+            registry.emplace<MeshComponent>(entity, ShapeType::Circle);
             registry.emplace<TransformComponent>(entity, DirectX::XMFLOAT3{ -1.5f, 0.0f, 0.0f });
         }
 
     }
     void OnUpdate(entt::registry& registry) override
     {
-		auto view = registry.view<TransformComponent, MeshComponent>();
-        for(auto [entity, transform, mesh] : view.each())
-        {
-            transform.rotation -= 0.01f;
-            transform.position.x += 0.01f;
-		}
+
     }
 
 

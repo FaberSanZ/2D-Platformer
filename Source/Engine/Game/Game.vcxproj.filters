@@ -35,5 +35,11 @@
     <ClInclude Include="Shapes2D.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="GameTime.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="PhysicsSystem.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

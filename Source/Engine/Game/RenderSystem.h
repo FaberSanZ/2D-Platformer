@@ -111,9 +111,13 @@ public:
 
 	void BeginFrame()
 	{
-		float clearColor[4] = { 0.2f, 0.3f, 0.3f, 1.0f };
-		//m_cmd->ClearRenderTargetView(m_renderTargetView, clearColor);
-		//m_cmd->OMSetRenderTargets(1, &m_renderTargetView, nullptr);
+		float clearColor[4] =
+		{
+			0.9294f,
+			0.8824f,
+			0.8275f,
+			1.0f
+		};
 
 		m_cmd->ClearRenderTargetView(m_msaaRenderTargetView, clearColor);
 		m_cmd->OMSetRenderTargets(1, &m_msaaRenderTargetView, nullptr);
@@ -133,6 +137,7 @@ public:
 
 	void Render()
 	{
+		// Rendering logic would go here, such as drawing meshes, updating resources, etc.
 	}
 
 	void EndFrame()
@@ -144,7 +149,7 @@ public:
 
 		m_swapChain->Present(1, 0);
 	}
-
+	
 
 	void Update()
 	{

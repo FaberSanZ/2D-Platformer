@@ -1,7 +1,9 @@
+#include <entt/entt.hpp>
 #include "GameWindow.h"
 #include "Components.h"
 #include "RenderSystem.h"
-#include <entt/entt.hpp>
+#include "GameTime.h"
+#include "PhysicsSystem.h"
 
 using namespace Vultaik;
 
@@ -59,12 +61,18 @@ public:
 		auto polygon = Shapes2D::CreateConvexPolygon(polygonPoints);
 		m_polygonMesh = m_renderSystem.CreateMesh(polygon.Vertices.data(), static_cast<uint32_t>(polygon.Vertices.size() * sizeof(Shapes2D::Vertex)), polygon.Indices.data(), static_cast<uint32_t>(polygon.Indices.size() * sizeof(uint32_t)), 64 * 64, m_texturePath);
 
+
+		m_gameTime.Reset();
+		m_physicsSystem.Initialize();
+
 		// Main game loop
 		while (m_window.IsRunning())
 		{
 			m_window.PumpMessages();
+			m_gameTime.Update();
 			OnUpdate(registry);
 			Update();
+			m_physicsSystem.Update(registry, m_gameTime.GetDeltaTime());
 
 			m_renderSystem.Update();
 			m_renderSystem.BeginFrame();
@@ -86,7 +94,11 @@ protected:
 private:
 
 	GameWindow m_window;
+	GameTime m_gameTime;
+
 	RenderSystem m_renderSystem;
+	PhysicsSystem m_physicsSystem;
+
 
 	Mesh2D m_spriteMesh;
 	Mesh2D m_rectangleMesh;
