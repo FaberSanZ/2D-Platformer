@@ -30,4 +30,5 @@ struct RigidBodyComponent
 {
 	DirectX::XMFLOAT2 position;
 	DirectX::XMFLOAT2 linearVelocity;
+	DirectX::XMFLOAT2 linearAcceleration;
 };

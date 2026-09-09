@@ -14,11 +14,16 @@ public:
 		auto view = registry.view<RigidBodyComponent, TransformComponent>();
 		for (auto [entity, body, transform] : view.each())
 		{
+			// Update velocity from acceleration.
+			body.linearVelocity.x += body.linearAcceleration.x * deltaTime;
+			body.linearVelocity.y += body.linearAcceleration.y * deltaTime;
+
 			body.position.x += body.linearVelocity.x * deltaTime;
 			body.position.y += body.linearVelocity.y * deltaTime;
 
-			transform.position.x += 0.6f * deltaTime;
-			transform.position.x += 0.6f * deltaTime;
+			// Synchronize the render transform.
+			transform.position.x = body.position.x;
+			transform.position.y = body.position.y;
 		}
 	}
 

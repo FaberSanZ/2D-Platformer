@@ -71,8 +71,8 @@ public:
 			m_window.PumpMessages();
 			m_gameTime.Update();
 			OnUpdate(registry);
-			Update();
 			m_physicsSystem.Update(registry, m_gameTime.GetDeltaTime());
+			Update();
 
 			m_renderSystem.Update();
 			m_renderSystem.BeginFrame();
