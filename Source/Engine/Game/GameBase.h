@@ -11,6 +11,7 @@
 #include "AnimationSystem.h"
 #include "EditorSystem.h"
 #include "SceneSystem.h"
+#include "SceneSerializer.h"
 
 using namespace Vultaik;
 
@@ -77,6 +78,7 @@ protected:
 	CameraSystem& Camera() { return m_cameraSystem; }
 	AnimationSystem& Animations() { return m_animationSystem; }
 	SceneSystem& Scene() { return m_sceneSystem; }
+	SceneSerializer& Serializer() { return m_sceneSerializer; }
 
 	virtual void OnInitialize(entt::registry& registry) = 0;
 	virtual void OnUpdate(entt::registry& registry, float deltaTime) = 0;
@@ -94,6 +96,8 @@ private:
 	EditorSystem m_editorSystem;
 	SceneSystem m_sceneSystem;
 
+
+	SceneSerializer m_sceneSerializer;
 	entt::registry registry;
 
 	void Render()

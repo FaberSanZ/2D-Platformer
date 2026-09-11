@@ -74,6 +74,7 @@ struct Model;
 struct ModelComponent
 {
     Model* model = nullptr;
+    std::string assetPath;
     DirectX::XMFLOAT4 color{ 1.0f, 1.0f, 1.0f, 1.0f };
 };
 

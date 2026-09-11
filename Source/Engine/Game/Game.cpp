@@ -54,6 +54,13 @@ protected:
         SetBossState(registry, BossState::Idle);
 
         UpdateThirdPersonCamera(registry);
+
+        Serializer().Save(registry, "../Assets/Scenes/TestScene.yaml", "TestScene");
+
+        entt::registry testRegistry;
+
+        if (Serializer().Load(testRegistry, Scene(), Assets(), "../Assets/Scenes/TestScene.yaml"))
+            Serializer().Save(testRegistry, "../Assets/Scenes/TestScene_RoundTrip.yaml", "TestScene");
     }
 
     void OnUpdate(entt::registry& registry, float deltaTime) override
@@ -86,6 +93,7 @@ private:
 
         auto& model = registry.emplace<ModelComponent>(entity);
         model.model = m_knightModel;
+        model.assetPath = "../Assets/Models/KnightCharacter.glb";
         model.color = { 0.25f, 0.55f, 1.0f, 1.0f };
 
         return entity;
@@ -103,6 +111,7 @@ private:
 
         auto& model = registry.emplace<ModelComponent>(entity);
         model.model = m_spiderModel;
+        model.assetPath = "../Assets/Models/Spider.glb";
         model.color = { 1.0f, 0.2f, 0.15f, 1.0f };
 
         return entity;

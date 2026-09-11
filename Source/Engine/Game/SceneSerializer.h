@@ -1,0 +1,171 @@
+#pragma once
+
+#include <fstream>
+#include <string>
+#include <entt/entt.hpp>
+#include <yaml-cpp/yaml.h>
+#include "Components.h"
+#include "SceneSystem.h"
+#include "AssetSystem.h"
+
+class SceneSerializer
+{
+public:
+    bool Save(const entt::registry& registry, const std::string& filePath, const std::string& sceneName)
+    {
+        YAML::Emitter out;
+
+        out << YAML::BeginMap;
+        out << YAML::Key << "Scene" << YAML::Value << sceneName;
+        out << YAML::Key << "Entities" << YAML::Value << YAML::BeginSeq;
+
+        auto view = registry.view<const IDComponent, const NameComponent, const TransformComponent>();
+
+        for (auto [entity, id, name, transform] : view.each())
+        {
+            out << YAML::BeginMap;
+            out << YAML::Key << "Entity" << YAML::Value << id.id;
+            out << YAML::Key << "Name" << YAML::Value << name.name;
+
+            out << YAML::Key << "Transform" << YAML::Value << YAML::BeginMap;
+            WriteFloat3(out, "Position", transform.position);
+            WriteFloat4(out, "Rotation", transform.rotation);
+            WriteFloat3(out, "Scale", transform.scale);
+            out << YAML::EndMap;
+
+            if (const ModelComponent* model = registry.try_get<ModelComponent>(entity))
+            {
+                out << YAML::Key << "Model" << YAML::Value << YAML::BeginMap;
+                out << YAML::Key << "Asset" << YAML::Value << model->assetPath;
+                WriteFloat4(out, "Color", model->color);
+                out << YAML::EndMap;
+            }
+
+            if (const CameraComponent* camera = registry.try_get<CameraComponent>(entity))
+            {
+                out << YAML::Key << "Camera" << YAML::Value << YAML::BeginMap;
+                out << YAML::Key << "FieldOfView" << YAML::Value << camera->fieldOfView;
+                out << YAML::Key << "NearPlane" << YAML::Value << camera->nearPlane;
+                out << YAML::Key << "FarPlane" << YAML::Value << camera->farPlane;
+                out << YAML::Key << "Primary" << YAML::Value << registry.any_of<PrimaryCameraComponent>(entity);
+                out << YAML::EndMap;
+            }
+
+            out << YAML::EndMap;
+        }
+
+        out << YAML::EndSeq;
+        out << YAML::EndMap;
+
+        std::ofstream file(filePath);
+
+        if (!file.is_open())
+            return false;
+
+        file << out.c_str();
+        return true;
+    }
+
+    bool Load(entt::registry& registry, SceneSystem& sceneSystem, AssetSystem& assetSystem, const std::string& filePath)
+    {
+        YAML::Node data;
+
+        try
+        {
+            data = YAML::LoadFile(filePath);
+        }
+        catch (const YAML::Exception&)
+        {
+            return false;
+        }
+
+        if (!data["Scene"] || !data["Entities"] || !data["Entities"].IsSequence())
+            return false;
+
+        registry.clear();
+
+        for (const YAML::Node& entityNode : data["Entities"])
+        {
+            if (!entityNode["Entity"] || !entityNode["Name"])
+                continue;
+
+            EntityID id = entityNode["Entity"].as<EntityID>();
+            std::string name = entityNode["Name"].as<std::string>();
+
+            entt::entity entity = sceneSystem.CreateEntity(registry, name, id);
+
+            if (YAML::Node transformNode = entityNode["Transform"])
+            {
+                TransformComponent& transform = registry.get<TransformComponent>(entity);
+                ReadFloat3(transformNode["Position"], transform.position);
+                ReadFloat4(transformNode["Rotation"], transform.rotation);
+                ReadFloat3(transformNode["Scale"], transform.scale);
+            }
+
+            if (YAML::Node modelNode = entityNode["Model"])
+            {
+                std::string assetPath = modelNode["Asset"].as<std::string>();
+
+                auto& model = registry.emplace<ModelComponent>(entity);
+                model.assetPath = assetPath;
+                model.model = assetSystem.LoadModel(assetPath);
+
+                if (modelNode["Color"])
+                    ReadFloat4(modelNode["Color"], model.color);
+            }
+
+            if (YAML::Node cameraNode = entityNode["Camera"])
+            {
+                auto& camera = registry.emplace<CameraComponent>(entity);
+
+                if (cameraNode["FieldOfView"])
+                    camera.fieldOfView = cameraNode["FieldOfView"].as<float>();
+
+                if (cameraNode["NearPlane"])
+                    camera.nearPlane = cameraNode["NearPlane"].as<float>();
+
+                if (cameraNode["FarPlane"])
+                    camera.farPlane = cameraNode["FarPlane"].as<float>();
+
+                if (cameraNode["Primary"] && cameraNode["Primary"].as<bool>())
+                    registry.emplace<PrimaryCameraComponent>(entity);
+            }
+        }
+
+        return true;
+    }
+
+private:
+    static void WriteFloat3(YAML::Emitter& out, const char* name, const DirectX::XMFLOAT3& value)
+    {
+        out << YAML::Key << name << YAML::Value << YAML::Flow << YAML::BeginSeq << value.x << value.y << value.z << YAML::EndSeq;
+    }
+
+    static void WriteFloat4(YAML::Emitter& out, const char* name, const DirectX::XMFLOAT4& value)
+    {
+        out << YAML::Key << name << YAML::Value << YAML::Flow << YAML::BeginSeq << value.x << value.y << value.z << value.w << YAML::EndSeq;
+    }
+
+    static bool ReadFloat3(const YAML::Node& node, DirectX::XMFLOAT3& value)
+    {
+        if (!node || !node.IsSequence() || node.size() != 3)
+            return false;
+
+        value.x = node[0].as<float>();
+        value.y = node[1].as<float>();
+        value.z = node[2].as<float>();
+        return true;
+    }
+
+    static bool ReadFloat4(const YAML::Node& node, DirectX::XMFLOAT4& value)
+    {
+        if (!node || !node.IsSequence() || node.size() != 4)
+            return false;
+
+        value.x = node[0].as<float>();
+        value.y = node[1].as<float>();
+        value.z = node[2].as<float>();
+        value.w = node[3].as<float>();
+        return true;
+    }
+};
