@@ -2,42 +2,45 @@
 
 #include <DirectXMath.h>
 
-
 struct TransformComponent
 {
-	DirectX::XMFLOAT3 position;
-	float rotation;
-};
-enum class ShapeType
-{
-	Rectangle,
-	Circle,
-	Capsule,
-	CapsuleBetween,
-	RoundedRectangle,
-	Sprite,
-	ConvexPolygon
+    DirectX::XMFLOAT3 position{ 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT4 rotation{ 0.0f, 0.0f, 0.0f, 1.0f };
+    DirectX::XMFLOAT3 scale{ 1.0f, 1.0f, 1.0f };
 };
 
-
-
-struct MeshComponent
-{
-	ShapeType shapeType;
-};
 
 enum class BodyType
 {
-	Static,
-	Kinematic,
-	Dynamic
+    Static,
+    Kinematic,
+    Dynamic
 };
-
 
 struct RigidBodyComponent
 {
-	BodyType type = BodyType::Static;
-	DirectX::XMFLOAT2 position;
-	DirectX::XMFLOAT2 linearVelocity;
-	DirectX::XMFLOAT2 linearAcceleration;
+    BodyType type = BodyType::Dynamic;
+
+    DirectX::XMFLOAT3 linearVelocity{ 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT3 linearAcceleration{ 0.0f, 0.0f, 0.0f };
 };
+
+
+struct CameraComponent
+{
+    float fieldOfView = 60.0f;
+    float nearPlane = 0.1f;
+    float farPlane = 1000.0f;
+};
+
+struct PrimaryCameraComponent
+{
+};
+
+struct Model;
+
+struct ModelComponent
+{
+    Model* model = nullptr;
+};
+

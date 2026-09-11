@@ -21,3 +21,50 @@ Abi: 87423ba4eb0adda5b13ff7938508e6e407452a41995b4913672b08dd394a9757
 Description: Gaming meets modern C++ - a fast and reliable entity-component system and much more
 Status: install ok installed
 
+Package: simdjson
+Version: 4.2.2
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: ebc755da55284ebb27e4a2793e95b567e49f64dbc2c3944ebd0e2de3322271ec
+Description: An extremely fast JSON library that can parse gigabytes of JSON per second
+Default-Features: deprecated, exceptions, threads, utf8-validation
+Status: install ok installed
+
+Package: simdjson
+Feature: deprecated
+Architecture: x64-windows
+Multi-Arch: same
+Description: Enable deprecated APIs
+Status: install ok installed
+
+Package: simdjson
+Feature: exceptions
+Architecture: x64-windows
+Multi-Arch: same
+Description: Enable exception-throwing interface
+Status: install ok installed
+
+Package: simdjson
+Feature: threads
+Architecture: x64-windows
+Multi-Arch: same
+Description: Link with thread support
+Status: install ok installed
+
+Package: simdjson
+Feature: utf8-validation
+Architecture: x64-windows
+Multi-Arch: same
+Description: Enable UTF-8 validation
+Status: install ok installed
+
+Package: fastgltf
+Version: 0.9.0
+Depends: simdjson, vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: d87a531632d3d923239c812ad1042cdc59aa2bdf814b8fe7806cbaf33a19f55c
+Description: A modern C++17 glTF 2.0 library focused on speed, correctness, and usability
+Status: install ok installed
+
