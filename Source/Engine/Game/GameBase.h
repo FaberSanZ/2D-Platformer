@@ -9,6 +9,7 @@
 #include "CameraSystem.h"
 #include "AssetSystem.h"
 #include "AnimationSystem.h"
+#include "EditorSystem.h"
 
 using namespace Vultaik;
 
@@ -29,6 +30,8 @@ public:
 
 		m_renderSystem.Initialize(m_window.Handle(), m_window.ClientWidth(), m_window.ClientHeight());
 		m_assetSystem.Initialize(&m_renderSystem);
+		m_editorSystem.Initialize(m_window.Handle(), m_renderSystem.Device(), m_renderSystem.Context());
+
 
 		m_gameTime.Reset();
 		m_physicsSystem.Initialize();
@@ -39,6 +42,9 @@ public:
 		{
 			m_window.PumpMessages();
 			m_gameTime.Update();
+
+			m_editorSystem.BeginFrame();
+
 			OnUpdate(registry, m_gameTime.GetDeltaTime());
 			m_animationSystem.Update(registry, m_gameTime.GetDeltaTime());
 			m_physicsSystem.Update(registry, m_gameTime.GetDeltaTime());
@@ -48,9 +54,13 @@ public:
 			DirectX::XMMATRIX viewProjection = m_cameraSystem.GetViewProjection(registry, aspectRatio);
 			m_renderSystem.Update(viewProjection);
 
-			//m_renderSystem.Update();
 			m_renderSystem.BeginFrame();
+
 			Render();
+
+			m_editorSystem.Draw(registry, m_animationSystem);
+			m_editorSystem.EndFrame();
+
 			m_renderSystem.EndFrame();
 		}
 
@@ -79,6 +89,7 @@ private:
 	CameraSystem m_cameraSystem;
 	AssetSystem m_assetSystem;
 	AnimationSystem m_animationSystem;
+	EditorSystem m_editorSystem;
 
 	entt::registry registry;
 

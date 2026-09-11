@@ -1,6 +1,13 @@
 {
   "dependencies": [
     "entt",
-    "fastgltf"
+    "fastgltf",
+    {
+      "name": "imgui",
+      "features": [
+        "dx11-binding",
+        "win32-binding"
+      ]
+    }
   ]
 }

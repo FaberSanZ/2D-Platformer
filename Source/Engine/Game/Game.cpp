@@ -40,8 +40,10 @@ protected:
         m_boss = CreateSpider(registry, { 4.0f, 0.0f, 0.0f });
 
         m_camera = registry.create();
+
         auto& cameraTransform = registry.emplace<TransformComponent>(m_camera);
         cameraTransform.position = { -10.0f, 3.0f, 0.0f };
+
         registry.emplace<CameraComponent>(m_camera);
         registry.emplace<PrimaryCameraComponent>(m_camera);
 
@@ -50,6 +52,7 @@ protected:
 
         SetPlayerState(registry, PlayerState::Idle);
         SetBossState(registry, BossState::Idle);
+
         UpdateThirdPersonCamera(registry);
     }
 
@@ -78,6 +81,7 @@ private:
         auto& transform = registry.emplace<TransformComponent>(entity);
         transform.position = position;
         transform.scale = { 1.0f, 1.0f, 1.0f };
+
         DirectX::XMStoreFloat4(&transform.rotation, DirectX::XMQuaternionRotationRollPitchYaw(0.0f, DirectX::XMConvertToRadians(90.0f), 0.0f));
 
         auto& model = registry.emplace<ModelComponent>(entity);
@@ -94,6 +98,7 @@ private:
         auto& transform = registry.emplace<TransformComponent>(entity);
         transform.position = position;
         transform.scale = { 1.0f, 1.0f, 1.0f };
+
         DirectX::XMStoreFloat4(&transform.rotation, DirectX::XMQuaternionRotationRollPitchYaw(0.0f, DirectX::XMConvertToRadians(-90.0f), 0.0f));
 
         auto& model = registry.emplace<ModelComponent>(entity);
@@ -112,11 +117,11 @@ private:
 
         switch (state)
         {
-        case PlayerState::Idle: Animations().Play(registry, m_player, "Idle", true, 0.18f); break;
-        case PlayerState::Walk: Animations().Play(registry, m_player, "Walking", true, 0.15f); break;
-        case PlayerState::Run: Animations().Play(registry, m_player, "Run", true, 0.12f); break;
+        case PlayerState::Idle: Animations().Play(registry, m_player, "Idle", true, 0.25f); break;
+        case PlayerState::Walk: Animations().Play(registry, m_player, "Walking", true, 0.25f); break;
+        case PlayerState::Run: Animations().Play(registry, m_player, "Run", true, 0.20f); break;
         case PlayerState::Roll: Animations().Play(registry, m_player, "Roll", false, 0.08f); break;
-        case PlayerState::Attack: Animations().Play(registry, m_player, "swordAttackJump", false, 0.08f); break;
+        case PlayerState::Attack: Animations().Play(registry, m_player, "swordAttackJump", false, 0.10f); break;
         case PlayerState::Death: Animations().Play(registry, m_player, "Death", false, 0.20f); break;
         }
     }
@@ -143,6 +148,7 @@ private:
             return;
 
         TransformComponent* transform = registry.try_get<TransformComponent>(m_player);
+
         if (!transform)
             return;
 
@@ -184,6 +190,7 @@ private:
         }
 
         DirectX::XMFLOAT3 movementDirection = GetMovementDirection();
+
         bool moving = movementDirection.x != 0.0f || movementDirection.z != 0.0f;
 
         if (attackPressed)
@@ -202,13 +209,18 @@ private:
             {
                 DirectX::XMVECTOR rotation = DirectX::XMLoadFloat4(&transform->rotation);
                 DirectX::XMVECTOR forward = DirectX::XMVector3Rotate(DirectX::XMVectorSet(0, 0, 1, 0), rotation);
+
                 DirectX::XMStoreFloat3(&m_rollDirection, forward);
+
                 m_rollDirection.y = 0.0f;
+
                 NormalizeDirection(m_rollDirection);
             }
 
-            FaceDirection(*transform, m_rollDirection);
+            FaceDirection(*transform, m_rollDirection, deltaTime, 14.0f);
+
             SetPlayerState(registry, PlayerState::Roll);
+
             return;
         }
 
@@ -218,13 +230,15 @@ private:
             return;
         }
 
-        bool running = GameInput::IsKeyDown(GameInput::KeyCode::Left);
+        bool running = GameInput::IsKeyDown(GameInput::KeyCode::Shift);
+
         float speed = running ? m_runSpeed : m_walkSpeed;
 
         transform->position.x += movementDirection.x * speed * deltaTime;
         transform->position.z += movementDirection.z * speed * deltaTime;
 
-        FaceDirection(*transform, movementDirection);
+        FaceDirection(*transform, movementDirection, deltaTime, m_playerRotationSpeed);
+
         SetPlayerState(registry, running ? PlayerState::Run : PlayerState::Walk);
     }
 
@@ -248,6 +262,7 @@ private:
                 return;
 
             m_bossAttackCooldown = 0.8f;
+
             SetBossState(registry, BossState::Idle);
         }
 
@@ -270,7 +285,8 @@ private:
         {
             direction.x /= distance;
             direction.z /= distance;
-            FaceDirection(*bossTransform, direction);
+
+            FaceDirection(*bossTransform, direction, deltaTime, m_bossRotationSpeed);
         }
 
         if (distance <= m_bossAttackRange)
@@ -305,28 +321,46 @@ private:
         DirectX::XMVECTOR yawRotation = DirectX::XMQuaternionRotationRollPitchYaw(0.0f, m_cameraYaw, 0.0f);
         DirectX::XMVECTOR forward = DirectX::XMVector3Rotate(DirectX::XMVectorSet(0, 0, 1, 0), yawRotation);
         DirectX::XMVECTOR right = DirectX::XMVector3Rotate(DirectX::XMVectorSet(1, 0, 0, 0), yawRotation);
+
         DirectX::XMVECTOR direction = DirectX::XMVectorAdd(DirectX::XMVectorScale(forward, inputZ), DirectX::XMVectorScale(right, inputX));
         direction = DirectX::XMVector3Normalize(direction);
 
         DirectX::XMFLOAT3 result{};
+
         DirectX::XMStoreFloat3(&result, direction);
+
         result.y = 0.0f;
+
         return result;
     }
 
-    void FaceDirection(TransformComponent& transform, const DirectX::XMFLOAT3& direction)
+    void FaceDirection(TransformComponent& transform, const DirectX::XMFLOAT3& direction, float deltaTime, float rotationSpeed)
     {
+        if (direction.x == 0.0f && direction.z == 0.0f)
+            return;
+
         float yaw = std::atan2(direction.x, direction.z);
-        DirectX::XMStoreFloat4(&transform.rotation, DirectX::XMQuaternionRotationRollPitchYaw(0.0f, yaw, 0.0f));
+
+        DirectX::XMVECTOR currentRotation = DirectX::XMLoadFloat4(&transform.rotation);
+        DirectX::XMVECTOR targetRotation = DirectX::XMQuaternionRotationRollPitchYaw(0.0f, yaw, 0.0f);
+
+        float factor = 1.0f - std::exp(-rotationSpeed * deltaTime);
+
+        DirectX::XMVECTOR rotation = DirectX::XMQuaternionSlerp(currentRotation, targetRotation, factor);
+        rotation = DirectX::XMQuaternionNormalize(rotation);
+
+        DirectX::XMStoreFloat4(&transform.rotation, rotation);
     }
 
     void NormalizeDirection(DirectX::XMFLOAT3& direction)
     {
         float lengthSquared = direction.x * direction.x + direction.z * direction.z;
+
         if (lengthSquared <= 0.0f)
             return;
 
         float length = std::sqrt(lengthSquared);
+
         direction.x /= length;
         direction.z /= length;
     }
@@ -336,8 +370,10 @@ private:
         if (GameInput::IsMouseButtonDown(GameInput::MouseButton::Right))
         {
             GameInput::SetMouseMode(GameInput::MouseMode::Relative);
+
             m_cameraYaw += static_cast<float>(GameInput::GetMouseDeltaX()) * m_cameraSensitivity;
             m_cameraPitch += static_cast<float>(GameInput::GetMouseDeltaY()) * m_cameraSensitivity;
+
             m_cameraPitch = std::clamp(m_cameraPitch, -0.90f, 0.35f);
         }
         else
@@ -368,10 +404,13 @@ private:
     BossState m_bossState = BossState::Death;
 
     float m_walkSpeed = 3.0f;
-    float m_runSpeed = 10.0f;
+    float m_runSpeed = 15.0f;
     float m_rollSpeed = 8.0f;
 
+    float m_playerRotationSpeed = 8.0f;
+
     float m_bossMoveSpeed = 2.2f;
+    float m_bossRotationSpeed = 5.0f;
     float m_bossDetectionRange = 12.0f;
     float m_bossAttackRange = 2.3f;
     float m_bossAttackCooldown = 0.0f;
@@ -393,5 +432,6 @@ int main()
 {
     Game game;
     game.Run();
+
     return 0;
 }

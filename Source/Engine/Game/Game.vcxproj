@@ -149,6 +149,7 @@
     <ClInclude Include="AssetSystem.h" />
     <ClInclude Include="CameraSystem.h" />
     <ClInclude Include="Components.h" />
+    <ClInclude Include="EditorSystem.h" />
     <ClInclude Include="GameBase.h" />
     <ClInclude Include="GameTime.h" />
     <ClInclude Include="GameWindow.h" />
@@ -156,7 +157,6 @@
     <ClInclude Include="PhysicsSystem.h" />
     <ClInclude Include="RenderSystem.h" />
     <ClInclude Include="Resource.h" />
-    <ClInclude Include="Shapes2D.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

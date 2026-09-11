@@ -124,6 +124,18 @@ public:
 	Resource m_joints;
 
 
+
+	ID3D11Device* Device() const
+	{
+		return m_device;
+	}
+
+	ID3D11DeviceContext* Context() const
+	{
+		return m_cmd;
+	}
+
+
 	NodePose GetNodePose(const Model& model, uint32_t nodeIndex, const std::vector<NodePose>* pose)
 	{
 		if (pose && nodeIndex < pose->size())

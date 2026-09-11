@@ -21,7 +21,7 @@
 #include <vector>
 
 #ifndef GAMETOOLS_ENABLE_IMGUI
-#define GAMETOOLS_ENABLE_IMGUI 0
+#define GAMETOOLS_ENABLE_IMGUI 1
 #endif
 
 #if GAMETOOLS_ENABLE_IMGUI
@@ -31,8 +31,11 @@
 #if !__has_include(<imgui_impl_win32.h>)
 #error "GAMETOOLS_ENABLE_IMGUI=1 requires <imgui_impl_win32.h>."
 #endif
+
 #include <imgui.h>
 #include <imgui_impl_win32.h>
+
+extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 #endif
 
 namespace Vultaik

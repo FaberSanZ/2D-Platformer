@@ -13,24 +13,28 @@
 struct AnimationComponent
 {
     uint32_t animationIndex = 0;
-
     float time = 0.0f;
 
     bool loop = true;
     bool playing = false;
     bool finished = false;
 
+    bool blending = false;
+
+    uint32_t sourceAnimationIndex = 0;
+    float sourceTime = 0.0f;
+    bool sourceLoop = true;
+
     float blendTime = 0.0f;
     float blendDuration = 0.0f;
 
     std::vector<NodePose> pose;
-    std::vector<NodePose> blendFromPose;
 };
 
 class AnimationSystem
 {
 public:
-    bool Play(entt::registry& registry, entt::entity entity, std::string_view animationName, bool loop = true, float blendDuration = 0.15f, bool restart = false)
+    bool Play(entt::registry& registry, entt::entity entity, std::string_view animationName, bool loop = true, float blendDuration = 0.20f, bool restart = false)
     {
         ModelComponent* modelComponent = registry.try_get<ModelComponent>(entity);
 
@@ -44,25 +48,59 @@ public:
             if (model.animations[i].name != animationName)
                 continue;
 
-            AnimationComponent& animation = registry.get_or_emplace<AnimationComponent>(entity);
+            AnimationComponent* existing = registry.try_get<AnimationComponent>(entity);
 
-            if (!restart && animation.playing && animation.animationIndex == i)
+            if (existing && !restart && existing->animationIndex == i && existing->playing)
                 return true;
 
-            if (animation.pose.empty())
-                ResetPose(model, animation.pose);
+            AnimationComponent& animation = registry.get_or_emplace<AnimationComponent>(entity);
 
-            animation.blendFromPose = animation.pose;
+            const uint32_t newAnimationIndex = static_cast<uint32_t>(i);
+            const AnimationClip& targetClip = model.animations[newAnimationIndex];
 
-            animation.animationIndex = static_cast<uint32_t>(i);
-            animation.time = 0.0f;
+            float normalizedTime = 0.0f;
 
+            if (animation.animationIndex < model.animations.size())
+            {
+                const AnimationClip& currentClip = model.animations[animation.animationIndex];
+
+                if (animation.loop && loop && currentClip.duration > 0.0f)
+                    normalizedTime = animation.time / currentClip.duration;
+            }
+
+            const bool canBlend =
+                !animation.pose.empty() &&
+                animation.animationIndex < model.animations.size() &&
+                blendDuration > 0.0f;
+
+            if (canBlend)
+            {
+                animation.sourceAnimationIndex = animation.animationIndex;
+                animation.sourceTime = animation.time;
+                animation.sourceLoop = animation.loop;
+
+                animation.blending = true;
+                animation.blendTime = 0.0f;
+                animation.blendDuration = blendDuration;
+            }
+            else
+            {
+                animation.blending = false;
+                animation.blendTime = 0.0f;
+                animation.blendDuration = 0.0f;
+            }
+
+            animation.animationIndex = newAnimationIndex;
+            animation.time = loop && targetClip.duration > 0.0f ? normalizedTime * targetClip.duration : 0.0f;
             animation.loop = loop;
             animation.playing = true;
             animation.finished = false;
 
-            animation.blendTime = 0.0f;
-            animation.blendDuration = blendDuration;
+            if (animation.pose.empty())
+            {
+                ResetPose(model, animation.pose);
+                Evaluate(animation.pose, targetClip, animation.time);
+            }
 
             return true;
         }
@@ -78,19 +116,18 @@ public:
             return;
 
         animation->playing = false;
+        animation->blending = false;
     }
 
     bool IsPlaying(entt::registry& registry, entt::entity entity) const
     {
         const AnimationComponent* animation = registry.try_get<AnimationComponent>(entity);
-
         return animation && animation->playing;
     }
 
     bool Finished(entt::registry& registry, entt::entity entity) const
     {
         const AnimationComponent* animation = registry.try_get<AnimationComponent>(entity);
-
         return animation && animation->finished;
     }
 
@@ -124,48 +161,96 @@ public:
             if (animation.animationIndex >= model.animations.size())
                 continue;
 
-            const AnimationClip& clip = model.animations[animation.animationIndex];
+            const AnimationClip& targetClip = model.animations[animation.animationIndex];
 
-            if (clip.duration <= 0.0f)
-                continue;
+            UpdateTargetTime(animation, targetClip, deltaTime);
 
-            if (animation.playing)
+            if (!animation.blending)
             {
-                animation.time += deltaTime;
-
-                if (animation.loop)
-                {
-                    animation.time = std::fmod(animation.time, clip.duration);
-                }
-                else if (animation.time >= clip.duration)
-                {
-                    animation.time = clip.duration;
-                    animation.playing = false;
-                    animation.finished = true;
-                }
+                ResetPose(model, animation.pose);
+                Evaluate(animation.pose, targetClip, animation.time);
+                continue;
             }
 
+            if (animation.sourceAnimationIndex >= model.animations.size())
+            {
+                animation.blending = false;
+
+                ResetPose(model, animation.pose);
+                Evaluate(animation.pose, targetClip, animation.time);
+
+                continue;
+            }
+
+            const AnimationClip& sourceClip = model.animations[animation.sourceAnimationIndex];
+
+            UpdateSourceTime(animation, sourceClip, deltaTime);
+
+            std::vector<NodePose> sourcePose;
             std::vector<NodePose> targetPose;
 
+            ResetPose(model, sourcePose);
             ResetPose(model, targetPose);
-            Evaluate(model, targetPose, clip, animation.time);
 
-            if (animation.blendDuration > 0.0f && animation.blendTime < animation.blendDuration && animation.blendFromPose.size() == targetPose.size())
+            Evaluate(sourcePose, sourceClip, animation.sourceTime);
+            Evaluate(targetPose, targetClip, animation.time);
+
+            animation.blendTime += deltaTime;
+
+            float factor = animation.blendDuration > 0.0f ? animation.blendTime / animation.blendDuration : 1.0f;
+            factor = std::clamp(factor, 0.0f, 1.0f);
+
+            const float smoothFactor = factor * factor * (3.0f - 2.0f * factor);
+
+            BlendPoses(sourcePose, targetPose, smoothFactor, animation.pose);
+
+            if (factor >= 1.0f)
             {
-                animation.blendTime += deltaTime;
-
-                float factor = std::clamp(animation.blendTime / animation.blendDuration, 0.0f, 1.0f);
-
-                BlendPoses(animation.blendFromPose, targetPose, factor, animation.pose);
-            }
-            else
-            {
-                animation.pose = std::move(targetPose);
+                animation.blending = false;
+                animation.blendTime = 0.0f;
+                animation.blendDuration = 0.0f;
             }
         }
     }
 
 private:
+    void UpdateTargetTime(AnimationComponent& animation, const AnimationClip& clip, float deltaTime)
+    {
+        if (!animation.playing || clip.duration <= 0.0f)
+            return;
+
+        animation.time += deltaTime;
+
+        if (animation.loop)
+        {
+            animation.time = std::fmod(animation.time, clip.duration);
+            return;
+        }
+
+        if (animation.time >= clip.duration)
+        {
+            animation.time = clip.duration;
+            animation.playing = false;
+            animation.finished = true;
+        }
+    }
+
+    void UpdateSourceTime(AnimationComponent& animation, const AnimationClip& clip, float deltaTime)
+    {
+        if (clip.duration <= 0.0f)
+            return;
+
+        animation.sourceTime += deltaTime;
+
+        if (animation.sourceLoop)
+        {
+            animation.sourceTime = std::fmod(animation.sourceTime, clip.duration);
+            return;
+        }
+
+        animation.sourceTime = std::min(animation.sourceTime, clip.duration);
+    }
+
     void ResetPose(const Model& model, std::vector<NodePose>& pose)
     {
         pose.resize(model.nodes.size());
@@ -178,14 +263,11 @@ private:
         }
     }
 
-    void Evaluate(const Model& model, std::vector<NodePose>& pose, const AnimationClip& clip, float time)
+    void Evaluate(std::vector<NodePose>& pose, const AnimationClip& clip, float time)
     {
         for (const AnimationChannel& channel : clip.channels)
         {
-            if (channel.nodeIndex >= pose.size())
-                continue;
-
-            if (channel.samplerIndex >= clip.samplers.size())
+            if (channel.nodeIndex >= pose.size() || channel.samplerIndex >= clip.samplers.size())
                 continue;
 
             const AnimationSampler& sampler = clip.samplers[channel.samplerIndex];
@@ -194,7 +276,6 @@ private:
                 continue;
 
             NodePose& node = pose[channel.nodeIndex];
-
             DirectX::XMFLOAT4 value = Sample(sampler, channel.path, time);
 
             switch (channel.path)
@@ -214,24 +295,24 @@ private:
         }
     }
 
-    void BlendPoses(const std::vector<NodePose>& from, const std::vector<NodePose>& to, float factor, std::vector<NodePose>& result)
+    void BlendPoses(const std::vector<NodePose>& source, const std::vector<NodePose>& target, float factor, std::vector<NodePose>& result)
     {
-        result.resize(to.size());
+        result.resize(target.size());
 
-        for (size_t i = 0; i < to.size(); ++i)
+        for (size_t i = 0; i < target.size(); ++i)
         {
-            DirectX::XMVECTOR fromTranslation = DirectX::XMLoadFloat3(&from[i].translation);
-            DirectX::XMVECTOR toTranslation = DirectX::XMLoadFloat3(&to[i].translation);
+            DirectX::XMVECTOR sourceTranslation = DirectX::XMLoadFloat3(&source[i].translation);
+            DirectX::XMVECTOR targetTranslation = DirectX::XMLoadFloat3(&target[i].translation);
 
-            DirectX::XMVECTOR fromRotation = DirectX::XMLoadFloat4(&from[i].rotation);
-            DirectX::XMVECTOR toRotation = DirectX::XMLoadFloat4(&to[i].rotation);
+            DirectX::XMVECTOR sourceRotation = DirectX::XMLoadFloat4(&source[i].rotation);
+            DirectX::XMVECTOR targetRotation = DirectX::XMLoadFloat4(&target[i].rotation);
 
-            DirectX::XMVECTOR fromScale = DirectX::XMLoadFloat3(&from[i].scale);
-            DirectX::XMVECTOR toScale = DirectX::XMLoadFloat3(&to[i].scale);
+            DirectX::XMVECTOR sourceScale = DirectX::XMLoadFloat3(&source[i].scale);
+            DirectX::XMVECTOR targetScale = DirectX::XMLoadFloat3(&target[i].scale);
 
-            DirectX::XMStoreFloat3(&result[i].translation, DirectX::XMVectorLerp(fromTranslation, toTranslation, factor));
-            DirectX::XMStoreFloat4(&result[i].rotation, DirectX::XMQuaternionSlerp(fromRotation, toRotation, factor));
-            DirectX::XMStoreFloat3(&result[i].scale, DirectX::XMVectorLerp(fromScale, toScale, factor));
+            DirectX::XMStoreFloat3(&result[i].translation, DirectX::XMVectorLerp(sourceTranslation, targetTranslation, factor));
+            DirectX::XMStoreFloat4(&result[i].rotation, DirectX::XMQuaternionSlerp(sourceRotation, targetRotation, factor));
+            DirectX::XMStoreFloat3(&result[i].scale, DirectX::XMVectorLerp(sourceScale, targetScale, factor));
         }
     }
 
@@ -245,26 +326,20 @@ private:
 
         auto upper = std::upper_bound(sampler.times.begin(), sampler.times.end(), time);
 
-        size_t nextIndex = static_cast<size_t>(upper - sampler.times.begin());
-        size_t previousIndex = nextIndex - 1;
+        const size_t nextIndex = static_cast<size_t>(upper - sampler.times.begin());
+        const size_t previousIndex = nextIndex - 1;
 
         if (sampler.interpolation == AnimationInterpolation::Step)
             return sampler.values[previousIndex];
 
-        float previousTime = sampler.times[previousIndex];
-        float nextTime = sampler.times[nextIndex];
-
-        float factor = (time - previousTime) / (nextTime - previousTime);
+        const float previousTime = sampler.times[previousIndex];
+        const float nextTime = sampler.times[nextIndex];
+        const float factor = (time - previousTime) / (nextTime - previousTime);
 
         DirectX::XMVECTOR previous = DirectX::XMLoadFloat4(&sampler.values[previousIndex]);
         DirectX::XMVECTOR next = DirectX::XMLoadFloat4(&sampler.values[nextIndex]);
 
-        DirectX::XMVECTOR result;
-
-        if (path == AnimationPath::Rotation)
-            result = DirectX::XMQuaternionSlerp(previous, next, factor);
-        else
-            result = DirectX::XMVectorLerp(previous, next, factor);
+        DirectX::XMVECTOR result = path == AnimationPath::Rotation ? DirectX::XMQuaternionSlerp(previous, next, factor) : DirectX::XMVectorLerp(previous, next, factor);
 
         DirectX::XMFLOAT4 value{};
         DirectX::XMStoreFloat4(&value, result);
