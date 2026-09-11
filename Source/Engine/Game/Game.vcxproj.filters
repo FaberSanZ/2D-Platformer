@@ -56,5 +56,8 @@
     <ClInclude Include="EditorSystem.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="SceneSystem.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

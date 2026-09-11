@@ -10,6 +10,7 @@
 #include "AssetSystem.h"
 #include "AnimationSystem.h"
 #include "EditorSystem.h"
+#include "SceneSystem.h"
 
 using namespace Vultaik;
 
@@ -75,6 +76,7 @@ protected:
 	PhysicsSystem& Physics() { return m_physicsSystem; }
 	CameraSystem& Camera() { return m_cameraSystem; }
 	AnimationSystem& Animations() { return m_animationSystem; }
+	SceneSystem& Scene() { return m_sceneSystem; }
 
 	virtual void OnInitialize(entt::registry& registry) = 0;
 	virtual void OnUpdate(entt::registry& registry, float deltaTime) = 0;
@@ -90,6 +92,7 @@ private:
 	AssetSystem m_assetSystem;
 	AnimationSystem m_animationSystem;
 	EditorSystem m_editorSystem;
+	SceneSystem m_sceneSystem;
 
 	entt::registry registry;
 

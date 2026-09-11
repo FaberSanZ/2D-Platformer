@@ -39,9 +39,9 @@ protected:
         m_player = CreateKnight(registry, { -4.0f, 0.0f, 0.0f });
         m_boss = CreateSpider(registry, { 4.0f, 0.0f, 0.0f });
 
-        m_camera = registry.create();
+        m_camera = Scene().CreateEntity(registry, "Camera");
 
-        auto& cameraTransform = registry.emplace<TransformComponent>(m_camera);
+        auto& cameraTransform = registry.get<TransformComponent>(m_camera);
         cameraTransform.position = { -10.0f, 3.0f, 0.0f };
 
         registry.emplace<CameraComponent>(m_camera);
@@ -76,9 +76,9 @@ protected:
 private:
     entt::entity CreateKnight(entt::registry& registry, const DirectX::XMFLOAT3& position)
     {
-        entt::entity entity = registry.create();
+        entt::entity entity = Scene().CreateEntity(registry, "Knight");
 
-        auto& transform = registry.emplace<TransformComponent>(entity);
+        auto& transform = registry.get<TransformComponent>(entity);
         transform.position = position;
         transform.scale = { 1.0f, 1.0f, 1.0f };
 
@@ -93,9 +93,9 @@ private:
 
     entt::entity CreateSpider(entt::registry& registry, const DirectX::XMFLOAT3& position)
     {
-        entt::entity entity = registry.create();
+        entt::entity entity = Scene().CreateEntity(registry, "Spider");
 
-        auto& transform = registry.emplace<TransformComponent>(entity);
+        auto& transform = registry.get<TransformComponent>(entity);
         transform.position = position;
         transform.scale = { 1.0f, 1.0f, 1.0f };
 

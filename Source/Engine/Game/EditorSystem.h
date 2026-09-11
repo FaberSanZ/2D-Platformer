@@ -2,6 +2,7 @@
 
 #include <Windows.h>
 #include <d3d11.h>
+#include <cstdint>
 #include <entt/entt.hpp>
 #include <imgui.h>
 #include <imgui_impl_win32.h>
@@ -35,8 +36,7 @@ public:
 
     void Draw(entt::registry& registry, AnimationSystem& animations)
     {
-        ImGui::SetNextWindowSize(ImVec2(760.0f, 460.0f), ImGuiCond_FirstUseEver);
-
+        ImGui::SetNextWindowSize(ImVec2(760.0f, 500.0f), ImGuiCond_FirstUseEver);
         ImGui::Begin("Soulslike Editor");
 
         ImGui::Text("FPS %.1f", ImGui::GetIO().Framerate);
@@ -56,7 +56,7 @@ public:
             DrawHierarchy(registry);
 
             ImGui::TableNextColumn();
-            DrawAnimation(registry, animations);
+            DrawInspector(registry, animations);
 
             ImGui::EndTable();
         }
@@ -93,19 +93,16 @@ private:
         ImGui::Text("Hierarchy");
         ImGui::Separator();
 
-        auto view = registry.view<ModelComponent>();
+        auto view = registry.view<IDComponent, NameComponent>();
 
-        for (entt::entity entity : view)
+        for (auto [entity, id, name] : view.each())
         {
-            const uint32_t id = static_cast<uint32_t>(entt::to_integral(entity));
-            const bool selected = entity == m_selectedEntity;
+            bool selected = entity == m_selectedEntity;
+            uint64_t entityID = id.id;
 
-            ImGui::PushID(static_cast<int>(id));
+            ImGui::PushID(static_cast<int>(entt::to_integral(entity)));
 
-            char label[64]{};
-            sprintf_s(label, "Entity #%u", id);
-
-            if (ImGui::Selectable(label, selected))
+            if (ImGui::Selectable(name.name.c_str(), selected))
             {
                 m_selectedEntity = entity;
 
@@ -115,13 +112,16 @@ private:
                     m_selectedClip = 0;
             }
 
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("ID: %llu", static_cast<unsigned long long>(entityID));
+
             ImGui::PopID();
         }
     }
 
-    void DrawAnimation(entt::registry& registry, AnimationSystem& animations)
+    void DrawInspector(entt::registry& registry, AnimationSystem& animations)
     {
-        ImGui::Text("Animation");
+        ImGui::Text("Inspector");
         ImGui::Separator();
 
         if (m_selectedEntity == entt::null || !registry.valid(m_selectedEntity))
@@ -130,21 +130,48 @@ private:
             return;
         }
 
+        NameComponent* name = registry.try_get<NameComponent>(m_selectedEntity);
+        IDComponent* id = registry.try_get<IDComponent>(m_selectedEntity);
+
+        if (name)
+            ImGui::Text("%s", name->name.c_str());
+
+        if (id)
+            ImGui::TextDisabled("ID: %llu", static_cast<unsigned long long>(id->id));
+
+        ImGui::Spacing();
+
+        DrawTransform(registry);
+        DrawAnimation(registry, animations);
+    }
+
+    void DrawTransform(entt::registry& registry)
+    {
+        TransformComponent* transform = registry.try_get<TransformComponent>(m_selectedEntity);
+
+        if (!transform)
+            return;
+
+        ImGui::SeparatorText("Transform");
+
+        ImGui::DragFloat3("Position", &transform->position.x, 0.05f);
+        ImGui::DragFloat4("Rotation", &transform->rotation.x, 0.01f);
+        ImGui::DragFloat3("Scale", &transform->scale.x, 0.01f, 0.001f, 100.0f);
+    }
+
+    void DrawAnimation(entt::registry& registry, AnimationSystem& animations)
+    {
         ModelComponent* modelComponent = registry.try_get<ModelComponent>(m_selectedEntity);
 
         if (!modelComponent || !modelComponent->model)
-        {
-            ImGui::TextDisabled("Entity has no model.");
             return;
-        }
 
         Model& model = *modelComponent->model;
 
         if (model.animations.empty())
-        {
-            ImGui::TextDisabled("Model has no animations.");
             return;
-        }
+
+        ImGui::SeparatorText("Animation");
 
         if (m_selectedClip >= model.animations.size())
             m_selectedClip = 0;
@@ -199,7 +226,6 @@ private:
 
         ImGui::Spacing();
         ImGui::Separator();
-        ImGui::Spacing();
 
         ImGui::Text("Playing: %s", animation->playing ? "Yes" : "No");
         ImGui::SameLine();

@@ -1,6 +1,38 @@
 #pragma once
-
+#include <cstdint>
+#include <random>
 #include <DirectXMath.h>
+
+
+
+using EntityID = uint64_t;
+
+inline EntityID GenerateEntityID()
+{
+    static std::random_device randomDevice;
+    static std::mt19937_64 generator(randomDevice());
+    static std::uniform_int_distribution<EntityID> distribution;
+
+    EntityID id = 0;
+
+    while (id == 0)
+        id = distribution(generator);
+
+    return id;
+}
+
+
+
+struct IDComponent
+{
+    EntityID id = 0;
+};
+
+struct NameComponent
+{
+    std::string name;
+};
+
 
 struct TransformComponent
 {
@@ -39,11 +71,10 @@ struct PrimaryCameraComponent
 
 struct Model;
 
-struct Model;
-
 struct ModelComponent
 {
     Model* model = nullptr;
     DirectX::XMFLOAT4 color{ 1.0f, 1.0f, 1.0f, 1.0f };
 };
+
 
