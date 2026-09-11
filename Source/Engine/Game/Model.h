@@ -97,6 +97,13 @@ struct Mesh
     std::vector<MeshPart> parts;
 };
 
+struct NodePose
+{
+    DirectX::XMFLOAT3 translation{ 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT4 rotation{ 0.0f, 0.0f, 0.0f, 1.0f };
+    DirectX::XMFLOAT3 scale{ 1.0f, 1.0f, 1.0f };
+};
+
 struct Model
 {
     std::vector<Node> nodes;
@@ -105,3 +112,5 @@ struct Model
     std::vector<Skin> skins;
     std::vector<AnimationClip> animations;
 };
+
+

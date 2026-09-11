@@ -7,45 +7,36 @@
 class Game final : public GameBase
 {
 protected:
-    Model* modelmesh;
+    Model* modelmesh = nullptr;
+
     void OnInitialize(entt::registry& registry) override
     {
         // Create primary camera.
         auto camera = registry.create();
 
-        registry.emplace<TransformComponent>(camera, DirectX::XMFLOAT3{ 0.0f, 0.0f, -7.0f });
+        auto& cameraTransform = registry.emplace<TransformComponent>(camera);
+        cameraTransform.position = { 0.0f, 2.0f, -20.0f };
+        cameraTransform.scale = { 1.0f, 1.0f, 1.0f };
+        DirectX::XMStoreFloat4(&cameraTransform.rotation, DirectX::XMQuaternionRotationRollPitchYaw(-0.12f, 0.0f, 0.0f));
+
         registry.emplace<CameraComponent>(camera);
         registry.emplace<PrimaryCameraComponent>(camera);
 
+        m_yaw = 0.0f;
+        m_pitch = -0.12f;
+
         // Load model.
         modelmesh = Assets().LoadModel("../Assets/Models/Spider.glb");
-        Animations().Play(modelmesh, "SpiderArmature|Spider_Walk");
 
-        auto entity = registry.create();
-
-        auto& transform = registry.emplace<TransformComponent>(entity);
-        transform.scale = { 1.0f, 1.0f, 1.0f };
-        transform.position = { 0.0f, 0.0f, 0.0f };
-        transform.scale = { 1.0f, 1.0f, 1.0f };
-        DirectX::XMStoreFloat4(&transform.rotation, DirectX::XMQuaternionRotationRollPitchYaw(0.0f, DirectX::XMConvertToRadians(90.0f), 0.0f));
-
-
-
-        auto& model = registry.emplace<ModelComponent>(entity);
-        model.model = modelmesh;
-        model.color = { 1.0f, 1.0f, 1.0f, 1.0f };
-
+        CreateSpider(registry, { -12.0f, 0.0f, 0.0f }, { 1.0f, 0.2f, 0.2f, 1.0f }, "SpiderArmature|Spider_Idle", true);
+        CreateSpider(registry, { -6.0f, 0.0f, 0.0f }, { 0.2f, 1.0f, 0.2f, 1.0f }, "SpiderArmature|Spider_Walk", true);
+        CreateSpider(registry, { 0.0f, 0.0f, 0.0f }, { 0.2f, 0.5f, 1.0f, 1.0f }, "SpiderArmature|Spider_Attack", true);
+        CreateSpider(registry, { 6.0f, 0.0f, 0.0f }, { 1.0f, 0.8f, 0.2f, 1.0f }, "SpiderArmature|Spider_Jump", true);
+        CreateSpider(registry, { 12.0f, 0.0f, 0.0f }, { 0.8f, 0.2f, 1.0f, 1.0f }, "SpiderArmature|Spider_Death", false);
     }
 
     void OnUpdate(entt::registry& registry, float deltaTime) override
     {
-
-        if (GameInput::IsKeyDown(GameInput::KeyCode::T)) 
-        {
-            Animations().Play(modelmesh, "SpiderArmature|Spider_Death", false);
-
-        }
-
         auto view = registry.view<TransformComponent, CameraComponent, PrimaryCameraComponent>();
 
         for (auto [entity, transform, camera] : view.each())
@@ -56,7 +47,6 @@ protected:
 
                 m_yaw += static_cast<float>(GameInput::GetMouseDeltaX()) * 0.0025f;
                 m_pitch += static_cast<float>(GameInput::GetMouseDeltaY()) * 0.0025f;
-
                 m_pitch = std::clamp(m_pitch, -1.5f, 1.5f);
 
                 DirectX::XMVECTOR rotation = DirectX::XMQuaternionRotationRollPitchYaw(m_pitch, m_yaw, 0.0f);
@@ -66,7 +56,7 @@ protected:
                 DirectX::XMVECTOR right = DirectX::XMVector3Rotate(DirectX::XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f), rotation);
                 DirectX::XMVECTOR position = DirectX::XMLoadFloat3(&transform.position);
 
-                float speed = 5.0f * deltaTime;
+                float speed = 8.0f * deltaTime;
 
                 if (GameInput::IsKeyDown(GameInput::KeyCode::W))
                     position = DirectX::XMVectorAdd(position, DirectX::XMVectorScale(forward, speed));
@@ -87,7 +77,6 @@ protected:
                 GameInput::SetMouseMode(GameInput::MouseMode::Absolute);
             }
 
-            // Only one PrimaryCameraComponent should exist.
             break;
         }
     }
@@ -98,6 +87,23 @@ protected:
     }
 
 private:
+    entt::entity CreateSpider(entt::registry& registry, const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT4& color, const char* animationName, bool loop)
+    {
+        entt::entity entity = registry.create();
+
+        auto& transform = registry.emplace<TransformComponent>(entity);
+        transform.position = position;
+        transform.scale = { 1.0f, 1.0f, 1.0f };
+        DirectX::XMStoreFloat4(&transform.rotation, DirectX::XMQuaternionRotationRollPitchYaw(0.0f, DirectX::XMConvertToRadians(90.0f), 0.0f));
+
+        auto& model = registry.emplace<ModelComponent>(entity);
+        model.model = modelmesh;
+        model.color = color;
+
+        Animations().Play(registry, entity, animationName, loop);
+
+        return entity;
+    }
 
     float m_yaw = 0.0f;
     float m_pitch = 0.0f;

@@ -3,91 +3,129 @@
 #include <DirectXMath.h>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <string_view>
-#include <unordered_map>
+#include <vector>
+#include <entt/entt.hpp>
+#include "Components.h"
 #include "Model.h"
+
+struct AnimationComponent
+{
+    uint32_t animationIndex = 0;
+    float time = 0.0f;
+
+    bool loop = true;
+    bool playing = false;
+
+    std::vector<NodePose> pose;
+};
 
 class AnimationSystem
 {
 public:
-
-    void Play(Model* model, std::string_view animationName, bool loop = true)
+    bool Play(entt::registry& registry, entt::entity entity, std::string_view animationName, bool loop = true)
     {
-        if (!model)
-            return;
+        ModelComponent* modelComponent = registry.try_get<ModelComponent>(entity);
 
-        for (size_t i = 0; i < model->animations.size(); ++i)
+        if (!modelComponent || !modelComponent->model)
+            return false;
+
+        Model& model = *modelComponent->model;
+
+        for (size_t i = 0; i < model.animations.size(); ++i)
         {
-            if (model->animations[i].name == animationName)
-            {
-                AnimationState& state = m_states[model];
+            if (model.animations[i].name != animationName)
+                continue;
 
-                state.animationIndex = static_cast<uint32_t>(i);
-                state.time = 0.0f;
-                state.loop = loop;
-                state.playing = true;
+            AnimationComponent& animation = registry.get_or_emplace<AnimationComponent>(entity);
 
-                return;
-            }
+            animation.animationIndex = static_cast<uint32_t>(i);
+            animation.time = 0.0f;
+            animation.loop = loop;
+            animation.playing = true;
+
+            ResetPose(model, animation);
+            Evaluate(model, animation, model.animations[i], 0.0f);
+
+            return true;
         }
+
+        return false;
     }
 
-    void Update(float deltaTime)
+    void Stop(entt::registry& registry, entt::entity entity)
     {
-        for (auto& [model, state] : m_states)
+        AnimationComponent* animation = registry.try_get<AnimationComponent>(entity);
+
+        if (!animation)
+            return;
+
+        animation->playing = false;
+        animation->time = 0.0f;
+
+        ModelComponent* modelComponent = registry.try_get<ModelComponent>(entity);
+
+        if (modelComponent && modelComponent->model)
+            ResetPose(*modelComponent->model, *animation);
+    }
+
+    void Update(entt::registry& registry, float deltaTime)
+    {
+        auto view = registry.view<ModelComponent, AnimationComponent>();
+
+        for (auto [entity, modelComponent, animation] : view.each())
         {
-            if (!model || !state.playing)
+            if (!modelComponent.model || !animation.playing)
                 continue;
 
-            if (state.animationIndex >= model->animations.size())
+            Model& model = *modelComponent.model;
+
+            if (animation.animationIndex >= model.animations.size())
                 continue;
 
-            AnimationClip& clip = model->animations[state.animationIndex];
+            const AnimationClip& clip = model.animations[animation.animationIndex];
 
             if (clip.duration <= 0.0f)
                 continue;
 
-            state.time += deltaTime;
+            animation.time += deltaTime;
 
-            if (state.loop)
-                state.time = std::fmod(state.time, clip.duration);
-            else if (state.time >= clip.duration)
+            if (animation.loop)
             {
-                state.time = clip.duration;
-                state.playing = false;
+                animation.time = std::fmod(animation.time, clip.duration);
+            }
+            else if (animation.time >= clip.duration)
+            {
+                animation.time = clip.duration;
+                animation.playing = false;
             }
 
-            Evaluate(*model, clip, state.time);
+            ResetPose(model, animation);
+            Evaluate(model, animation, clip, animation.time);
         }
     }
 
 private:
-
-    struct AnimationState
+    void ResetPose(const Model& model, AnimationComponent& animation)
     {
-        uint32_t animationIndex = 0;
+        animation.pose.resize(model.nodes.size());
 
-        float time = 0.0f;
-
-        bool loop = true;
-        bool playing = false;
-    };
-
-    std::unordered_map<Model*, AnimationState> m_states;
-
-    void Evaluate(Model& model, const AnimationClip& clip, float time)
-    {
-        // Reset every node to its original transform.
-        for (Node& node : model.nodes)
+        for (size_t i = 0; i < model.nodes.size(); ++i)
         {
-            node.translation = node.baseTranslation;
-            node.rotation = node.baseRotation;
-            node.scale = node.baseScale;
-        }
+            const Node& node = model.nodes[i];
 
+            animation.pose[i].translation = node.translation;
+            animation.pose[i].rotation = node.rotation;
+            animation.pose[i].scale = node.scale;
+        }
+    }
+
+    void Evaluate(const Model& model, AnimationComponent& animation, const AnimationClip& clip, float time)
+    {
         for (const AnimationChannel& channel : clip.channels)
         {
-            if (channel.nodeIndex >= model.nodes.size())
+            if (channel.nodeIndex >= animation.pose.size())
                 continue;
 
             if (channel.samplerIndex >= clip.samplers.size())
@@ -98,7 +136,7 @@ private:
             if (sampler.times.empty() || sampler.values.empty())
                 continue;
 
-            Node& node = model.nodes[channel.nodeIndex];
+            NodePose& node = animation.pose[channel.nodeIndex];
 
             DirectX::XMFLOAT4 value = Sample(sampler, channel.path, time);
 
@@ -151,7 +189,6 @@ private:
             result = DirectX::XMVectorLerp(previous, next, factor);
 
         DirectX::XMFLOAT4 value{};
-
         DirectX::XMStoreFloat4(&value, result);
 
         return value;

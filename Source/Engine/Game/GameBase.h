@@ -40,7 +40,7 @@ public:
 			m_window.PumpMessages();
 			m_gameTime.Update();
 			OnUpdate(registry, m_gameTime.GetDeltaTime());
-			m_animationSystem.Update(m_gameTime.GetDeltaTime());
+			m_animationSystem.Update(registry, m_gameTime.GetDeltaTime());
 			m_physicsSystem.Update(registry, m_gameTime.GetDeltaTime());
 
 			float aspectRatio = static_cast<float>(m_window.ClientWidth()) / static_cast<float>(m_window.ClientHeight());
@@ -96,12 +96,21 @@ private:
 			DirectX::XMVECTOR rotation = DirectX::XMLoadFloat4(&transform.rotation);
 
 			InstanceData instance{};
+
 			instance.world = DirectX::XMMatrixTranspose(
 				DirectX::XMMatrixScaling(transform.scale.x, transform.scale.y, transform.scale.z) *
 				DirectX::XMMatrixRotationQuaternion(rotation) *
 				DirectX::XMMatrixTranslation(transform.position.x, transform.position.y, transform.position.z));
 
 			instance.baseColor = model.color;
+
+			AnimationComponent* animation = registry.try_get<AnimationComponent>(entity);
+
+			if (animation && !animation->pose.empty())
+			{
+				m_renderSystem.DrawModel(*model.model, &instance, 1, &animation->pose);
+				continue;
+			}
 
 			batches[model.model].push_back(instance);
 		}

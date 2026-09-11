@@ -124,7 +124,26 @@ public:
 	Resource m_joints;
 
 
-	DirectX::XMMATRIX GetLocalNodeTransform(const Node& node)
+	NodePose GetNodePose(const Model& model, uint32_t nodeIndex, const std::vector<NodePose>* pose)
+	{
+		if (pose && nodeIndex < pose->size())
+			return (*pose)[nodeIndex];
+
+		NodePose result{};
+
+		if (nodeIndex >= model.nodes.size())
+			return result;
+
+		const Node& node = model.nodes[nodeIndex];
+
+		result.translation = node.translation;
+		result.rotation = node.rotation;
+		result.scale = node.scale;
+
+		return result;
+	}
+
+	DirectX::XMMATRIX GetLocalNodeTransform(const NodePose& node)
 	{
 		DirectX::XMVECTOR rotation = DirectX::XMLoadFloat4(&node.rotation);
 
@@ -133,31 +152,35 @@ public:
 			DirectX::XMMatrixTranslation(node.translation.x, node.translation.y, node.translation.z);
 	}
 
-
-	DirectX::XMMATRIX GetNodeTransform(const Model& model, const Node* node)
+	DirectX::XMMATRIX GetNodeTransform(const Model& model, uint32_t nodeIndex, const std::vector<NodePose>* pose = nullptr)
 	{
-		if (!node)
+		if (nodeIndex >= model.nodes.size())
 			return DirectX::XMMatrixIdentity();
 
-		DirectX::XMMATRIX transform = GetLocalNodeTransform(*node);
-		int32_t parent = node->parent;
+		NodePose nodePose = GetNodePose(model, nodeIndex, pose);
+
+		DirectX::XMMATRIX transform = GetLocalNodeTransform(nodePose);
+
+		int32_t parent = model.nodes[nodeIndex].parent;
 
 		while (parent >= 0)
 		{
-			const Node& parentNode = model.nodes[parent];
-			transform = transform * GetLocalNodeTransform(parentNode);
-			parent = parentNode.parent;
+			NodePose parentPose = GetNodePose(model, static_cast<uint32_t>(parent), pose);
+
+			transform = transform * GetLocalNodeTransform(parentPose);
+
+			parent = model.nodes[parent].parent;
 		}
 
 		return transform;
 	}
 
 
-	void BuildSkinMatrices(const Model& model, const Node& meshNode, const Skin& skin, std::vector<DirectX::XMMATRIX>& jointMatrices)
+	void BuildSkinMatrices(const Model& model, uint32_t meshNodeIndex, const Skin& skin, const std::vector<NodePose>* pose, std::vector<DirectX::XMMATRIX>& jointMatrices)
 	{
 		jointMatrices.resize(skin.joints.size());
 
-		DirectX::XMMATRIX meshTransform = GetNodeTransform(model, &meshNode);
+		DirectX::XMMATRIX meshTransform = GetNodeTransform(model, meshNodeIndex, pose);
 		DirectX::XMMATRIX inverseMeshTransform = DirectX::XMMatrixInverse(nullptr, meshTransform);
 
 		for (size_t i = 0; i < skin.joints.size(); ++i)
@@ -166,14 +189,12 @@ public:
 
 			if (jointNodeIndex >= model.nodes.size() || i >= skin.inverseBindMatrices.size())
 			{
-				jointMatrices[i] = DirectX::XMMatrixIdentity();
+				jointMatrices[i] = DirectX::XMMatrixTranspose(DirectX::XMMatrixIdentity());
 				continue;
 			}
 
-			const Node& jointNode = model.nodes[jointNodeIndex];
-
 			DirectX::XMMATRIX inverseBind = DirectX::XMLoadFloat4x4(&skin.inverseBindMatrices[i]);
-			DirectX::XMMATRIX jointTransform = GetNodeTransform(model, &jointNode);
+			DirectX::XMMATRIX jointTransform = GetNodeTransform(model, jointNodeIndex, pose);
 
 			DirectX::XMMATRIX skinMatrix = inverseBind * jointTransform * inverseMeshTransform;
 
@@ -181,8 +202,7 @@ public:
 		}
 	}
 
-
-	void DrawModel(const Model& model, const InstanceData* instances, uint32_t instanceCount)
+	void DrawModel(const Model& model, const InstanceData* instances, uint32_t instanceCount, const std::vector<NodePose>* pose = nullptr)
 	{
 		if (instanceCount == 0)
 			return;
@@ -193,7 +213,12 @@ public:
 		{
 			for (const MeshPart& part : mesh.parts)
 			{
-				DirectX::XMMATRIX nodeTransform = GetNodeTransform(model, part.node);
+				uint32_t nodeIndex = 0;
+
+				if (part.node)
+					nodeIndex = static_cast<uint32_t>(part.node - model.nodes.data());
+
+				DirectX::XMMATRIX nodeTransform = GetNodeTransform(model, nodeIndex, pose);
 				DirectX::XMMATRIX gpuNodeTransform = DirectX::XMMatrixTranspose(nodeTransform);
 
 				UpdateGpuData(m_node, &gpuNodeTransform, 1);
@@ -212,7 +237,7 @@ public:
 						{
 							std::vector<DirectX::XMMATRIX> jointMatrices;
 
-							BuildSkinMatrices(model, *part.node, skin, jointMatrices);
+							BuildSkinMatrices(model, nodeIndex, skin, pose, jointMatrices);
 
 							UpdateGpuData(m_joints, jointMatrices.data(), static_cast<uint32_t>(jointMatrices.size()));
 
@@ -221,11 +246,15 @@ public:
 					}
 				}
 
+				if (!hasSkin)
+				{
+					DirectX::XMMATRIX identity = DirectX::XMMatrixTranspose(DirectX::XMMatrixIdentity());
+					UpdateGpuData(m_joints, &identity, 1);
+				}
+
 				m_cmd->VSSetShaderResources(0, 1, &part.vertex.srv);
 				m_cmd->VSSetShaderResources(1, 1, &m_instances.srv);
-
-				ID3D11ShaderResourceView* jointSrv = hasSkin ? m_joints.srv : nullptr;
-				m_cmd->VSSetShaderResources(2, 1, &jointSrv);
+				m_cmd->VSSetShaderResources(2, 1, &m_joints.srv);
 
 				m_cmd->PSSetShaderResources(1, 1, &m_instances.srv);
 
@@ -236,7 +265,6 @@ public:
 			}
 		}
 	}
-
 
 	void DrawTestTriangle()
 	{
