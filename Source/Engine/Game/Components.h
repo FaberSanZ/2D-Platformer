@@ -39,8 +39,11 @@ struct PrimaryCameraComponent
 
 struct Model;
 
+struct Model;
+
 struct ModelComponent
 {
     Model* model = nullptr;
+    DirectX::XMFLOAT4 color{ 1.0f, 1.0f, 1.0f, 1.0f };
 };
 

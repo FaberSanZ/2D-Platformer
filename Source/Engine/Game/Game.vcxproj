@@ -145,6 +145,7 @@
     <ClCompile Include="Game.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AnimationSystem.h" />
     <ClInclude Include="AssetSystem.h" />
     <ClInclude Include="CameraSystem.h" />
     <ClInclude Include="Components.h" />

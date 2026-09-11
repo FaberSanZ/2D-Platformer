@@ -1,5 +1,6 @@
 #include <entt/entt.hpp>
 #include <unordered_map>
+#include <vector>
 #include "GameWindow.h"
 #include "Components.h"
 #include "RenderSystem.h"
@@ -7,6 +8,7 @@
 #include "PhysicsSystem.h"
 #include "CameraSystem.h"
 #include "AssetSystem.h"
+#include "AnimationSystem.h"
 
 using namespace Vultaik;
 
@@ -37,7 +39,8 @@ public:
 		{
 			m_window.PumpMessages();
 			m_gameTime.Update();
-			OnUpdate(registry);
+			OnUpdate(registry, m_gameTime.GetDeltaTime());
+			m_animationSystem.Update(m_gameTime.GetDeltaTime());
 			m_physicsSystem.Update(registry, m_gameTime.GetDeltaTime());
 
 			float aspectRatio = static_cast<float>(m_window.ClientWidth()) / static_cast<float>(m_window.ClientHeight());
@@ -61,9 +64,10 @@ protected:
 	RenderSystem& Renderer() { return m_renderSystem; }
 	PhysicsSystem& Physics() { return m_physicsSystem; }
 	CameraSystem& Camera() { return m_cameraSystem; }
+	AnimationSystem& Animations() { return m_animationSystem; }
 
 	virtual void OnInitialize(entt::registry& registry) = 0;
-	virtual void OnUpdate(entt::registry& registry) = 0;
+	virtual void OnUpdate(entt::registry& registry, float deltaTime) = 0;
 	virtual void OnDestroy(entt::registry& registry) = 0;
 
 private:
@@ -74,30 +78,36 @@ private:
 	PhysicsSystem m_physicsSystem;
 	CameraSystem m_cameraSystem;
 	AssetSystem m_assetSystem;
+	AnimationSystem m_animationSystem;
 
 	entt::registry registry;
 
 	void Render()
 	{
-		std::unordered_map<Model*, std::vector<DirectX::XMFLOAT4X4>> batches;
+		std::unordered_map<Model*, std::vector<InstanceData>> batches;
 
 		auto view = registry.view<TransformComponent, ModelComponent>();
 
 		for (auto [entity, transform, model] : view.each())
 		{
-			DirectX::XMMATRIX scale = DirectX::XMMatrixScaling(transform.scale.x, transform.scale.y, transform.scale.z);
-			DirectX::XMMATRIX rotation = DirectX::XMMatrixRotationQuaternion(DirectX::XMLoadFloat4(&transform.rotation));
-			DirectX::XMMATRIX translation = DirectX::XMMatrixTranslation(transform.position.x, transform.position.y, transform.position.z);
-			DirectX::XMMATRIX world = DirectX::XMMatrixTranspose(scale * rotation * translation);
+			if (!model.model)
+				continue;
 
-			DirectX::XMFLOAT4X4 matrix;
-			DirectX::XMStoreFloat4x4(&matrix, world);
+			DirectX::XMVECTOR rotation = DirectX::XMLoadFloat4(&transform.rotation);
 
-			batches[model.model].push_back(matrix);
+			InstanceData instance{};
+			instance.world = DirectX::XMMatrixTranspose(
+				DirectX::XMMatrixScaling(transform.scale.x, transform.scale.y, transform.scale.z) *
+				DirectX::XMMatrixRotationQuaternion(rotation) *
+				DirectX::XMMatrixTranslation(transform.position.x, transform.position.y, transform.position.z));
+
+			instance.baseColor = model.color;
+
+			batches[model.model].push_back(instance);
 		}
 
-		for (auto& [model, transforms] : batches)
-			m_renderSystem.DrawModel(*model, transforms.data(), static_cast<uint32_t>(transforms.size()));
+		for (auto& [model, instances] : batches)
+			m_renderSystem.DrawModel(*model, instances.data(), static_cast<uint32_t>(instances.size()));
 	}
 
 	void Update()

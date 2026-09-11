@@ -11,6 +11,19 @@
 #pragma comment(lib, "windowscodecs.lib")
 
 
+struct InstanceData
+{
+	DirectX::XMMATRIX world = DirectX::XMMatrixIdentity();
+	DirectX::XMFLOAT4 baseColor{ 1.0f, 1.0f, 1.0f, 1.0f };
+};
+
+
+struct DirectionalLight
+{
+	DirectX::XMFLOAT4 direction{ 0.35f, -0.55f, 0.75f, 0.0f };
+	DirectX::XMFLOAT4 colorIntensity{ 1.0f, 1.0f, 1.0f, 3.0f };
+};
+
 class RenderSystem
 {
 public:
@@ -81,8 +94,6 @@ public:
 		CompileShaderFromFile(L"../Assets/Shaders/Pixel.hlsl", "PS", "ps_5_0", &psBlob);
 		m_device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &m_pixelShader);
 
-		// camera like
-		m_camera = CreateConstantBuffer(sizeof(DirectX::XMMATRIX), 1);
 
 		D3D11_SAMPLER_DESC samplerDesc{};
 		samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
@@ -93,9 +104,13 @@ public:
 		m_device->CreateSamplerState(&samplerDesc, &m_sampler);
 
 
-		m_instances = CreateStructuredBuffer(sizeof(DirectX::XMMATRIX), 16 * 16);
-		DirectX::XMMATRIX model = DirectX::XMMatrixTranspose(DirectX::XMMatrixIdentity());
-		UpdateGpuData(m_instances, &model, 1);
+		m_camera = CreateConstantBuffer(sizeof(DirectX::XMMATRIX), 1);
+		m_light = CreateConstantBuffer(sizeof(DirectionalLight), 1);
+		m_instances = CreateStructuredBuffer(sizeof(InstanceData), 1024);
+		m_node = CreateConstantBuffer(sizeof(DirectX::XMMATRIX), 1);
+		m_joints = CreateStructuredBuffer(sizeof(DirectX::XMMATRIX), 256);
+
+		UpdateGpuData(m_light, &m_sun, 1);
 	}
 	struct TestVertex
 	{
@@ -104,45 +119,124 @@ public:
 		DirectX::XMFLOAT2 uv;
 	};
 
-	Resource m_instances;
+
+	Resource m_node;
+	Resource m_joints;
 
 
-	//void DrawModel(const Model& model, const DirectX::XMMATRIX& transform)
-	//{
-	//	DirectX::XMMATRIX matrix = DirectX::XMMatrixTranspose(transform);
-	//	UpdateGpuData(m_instances, &matrix, 1);
+	DirectX::XMMATRIX GetLocalNodeTransform(const Node& node)
+	{
+		DirectX::XMVECTOR rotation = DirectX::XMLoadFloat4(&node.rotation);
 
-	//	for (const Mesh& mesh : model.meshes)
-	//	{
-	//		for (const MeshPart& part : mesh.parts)
-	//		{
-	//			m_cmd->VSSetShaderResources(0, 1, &part.vertex.srv);
-	//			m_cmd->VSSetShaderResources(1, 1, &m_instances.srv);
-	//			m_cmd->IASetIndexBuffer((ID3D11Buffer*)part.index.resource, DXGI_FORMAT_R32_UINT, 0);
-	//			m_cmd->DrawIndexedInstanced(part.index.count, 1, 0, 0, 0);
-	//		}
-	//	}
-	//}
+		return DirectX::XMMatrixScaling(node.scale.x, node.scale.y, node.scale.z) *
+			DirectX::XMMatrixRotationQuaternion(rotation) *
+			DirectX::XMMatrixTranslation(node.translation.x, node.translation.y, node.translation.z);
+	}
 
 
-	void DrawModel(const Model& model, const DirectX::XMFLOAT4X4* transforms, uint32_t instanceCount)
+	DirectX::XMMATRIX GetNodeTransform(const Model& model, const Node* node)
+	{
+		if (!node)
+			return DirectX::XMMatrixIdentity();
+
+		DirectX::XMMATRIX transform = GetLocalNodeTransform(*node);
+		int32_t parent = node->parent;
+
+		while (parent >= 0)
+		{
+			const Node& parentNode = model.nodes[parent];
+			transform = transform * GetLocalNodeTransform(parentNode);
+			parent = parentNode.parent;
+		}
+
+		return transform;
+	}
+
+
+	void BuildSkinMatrices(const Model& model, const Node& meshNode, const Skin& skin, std::vector<DirectX::XMMATRIX>& jointMatrices)
+	{
+		jointMatrices.resize(skin.joints.size());
+
+		DirectX::XMMATRIX meshTransform = GetNodeTransform(model, &meshNode);
+		DirectX::XMMATRIX inverseMeshTransform = DirectX::XMMatrixInverse(nullptr, meshTransform);
+
+		for (size_t i = 0; i < skin.joints.size(); ++i)
+		{
+			uint32_t jointNodeIndex = skin.joints[i];
+
+			if (jointNodeIndex >= model.nodes.size() || i >= skin.inverseBindMatrices.size())
+			{
+				jointMatrices[i] = DirectX::XMMatrixIdentity();
+				continue;
+			}
+
+			const Node& jointNode = model.nodes[jointNodeIndex];
+
+			DirectX::XMMATRIX inverseBind = DirectX::XMLoadFloat4x4(&skin.inverseBindMatrices[i]);
+			DirectX::XMMATRIX jointTransform = GetNodeTransform(model, &jointNode);
+
+			DirectX::XMMATRIX skinMatrix = inverseBind * jointTransform * inverseMeshTransform;
+
+			jointMatrices[i] = DirectX::XMMatrixTranspose(skinMatrix);
+		}
+	}
+
+
+	void DrawModel(const Model& model, const InstanceData* instances, uint32_t instanceCount)
 	{
 		if (instanceCount == 0)
 			return;
 
-		UpdateGpuData(m_instances, transforms, instanceCount);
+		UpdateGpuData(m_instances, instances, instanceCount);
 
 		for (const Mesh& mesh : model.meshes)
 		{
 			for (const MeshPart& part : mesh.parts)
 			{
+				DirectX::XMMATRIX nodeTransform = GetNodeTransform(model, part.node);
+				DirectX::XMMATRIX gpuNodeTransform = DirectX::XMMatrixTranspose(nodeTransform);
+
+				UpdateGpuData(m_node, &gpuNodeTransform, 1);
+
+				bool hasSkin = false;
+
+				if (part.node && part.node->skinIndex >= 0)
+				{
+					uint32_t skinIndex = static_cast<uint32_t>(part.node->skinIndex);
+
+					if (skinIndex < model.skins.size())
+					{
+						const Skin& skin = model.skins[skinIndex];
+
+						if (!skin.joints.empty() && skin.joints.size() <= m_joints.count)
+						{
+							std::vector<DirectX::XMMATRIX> jointMatrices;
+
+							BuildSkinMatrices(model, *part.node, skin, jointMatrices);
+
+							UpdateGpuData(m_joints, jointMatrices.data(), static_cast<uint32_t>(jointMatrices.size()));
+
+							hasSkin = true;
+						}
+					}
+				}
+
 				m_cmd->VSSetShaderResources(0, 1, &part.vertex.srv);
 				m_cmd->VSSetShaderResources(1, 1, &m_instances.srv);
+
+				ID3D11ShaderResourceView* jointSrv = hasSkin ? m_joints.srv : nullptr;
+				m_cmd->VSSetShaderResources(2, 1, &jointSrv);
+
+				m_cmd->PSSetShaderResources(1, 1, &m_instances.srv);
+
+				m_cmd->VSSetConstantBuffers(2, 1, (ID3D11Buffer**)&m_node.resource);
+
 				m_cmd->IASetIndexBuffer((ID3D11Buffer*)part.index.resource, DXGI_FORMAT_R32_UINT, 0);
 				m_cmd->DrawIndexedInstanced(part.index.count, instanceCount, 0, 0, 0);
 			}
 		}
 	}
+
 
 	void DrawTestTriangle()
 	{
@@ -151,23 +245,28 @@ public:
 
 	void BeginFrame()
 	{
-		float clearColor[4] = { 0.9294f,0.8824f,0.8275f,1.0f };
+		float clearColor[4] = { 0.9294f, 0.8824f, 0.8275f, 1.0f };
+
 		m_cmd->ClearRenderTargetView(m_msaaRenderTargetView, clearColor);
 		m_cmd->ClearDepthStencilView(m_depthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
 		m_cmd->OMSetRenderTargets(1, &m_msaaRenderTargetView, m_depthStencilView);
 
-		D3D11_VIEWPORT viewport = {};
-		viewport.Width = m_width;
-		viewport.Height = m_height;
+		D3D11_VIEWPORT viewport{};
+		viewport.Width = static_cast<float>(m_width);
+		viewport.Height = static_cast<float>(m_height);
 		viewport.MinDepth = 0.0f;
 		viewport.MaxDepth = 1.0f;
+
 		m_cmd->RSSetViewports(1, &viewport);
 
 		m_cmd->VSSetShader(m_vertexShader, nullptr, 0);
 		m_cmd->PSSetShader(m_pixelShader, nullptr, 0);
+
 		m_cmd->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
 		m_cmd->VSSetConstantBuffers(0, 1, (ID3D11Buffer**)&m_camera.resource);
+		m_cmd->PSSetConstantBuffers(1, 1, (ID3D11Buffer**)&m_light.resource);
 	}
 
 	void Render()
@@ -303,6 +402,9 @@ private:
 	ID3D11DepthStencilView* m_depthStencilView = nullptr;
 
 	Resource m_camera;
+	Resource m_instances;
+	Resource m_light;
+	DirectionalLight m_sun;
 
 	void CompileShaderFromFile(const wchar_t* filePath, const char* entryPoint, const char* shaderModel, ID3DBlob** blob)
 	{
