@@ -24,6 +24,7 @@ public:
         for (auto [entity, id, name, transform] : view.each())
         {
             out << YAML::BeginMap;
+
             out << YAML::Key << "Entity" << YAML::Value << id.id;
             out << YAML::Key << "Name" << YAML::Value << name.name;
 
@@ -51,6 +52,12 @@ public:
                 out << YAML::EndMap;
             }
 
+            if (registry.any_of<PlayerComponent>(entity))
+                out << YAML::Key << "Player" << YAML::Value << true;
+
+            if (registry.any_of<BossComponent>(entity))
+                out << YAML::Key << "Boss" << YAML::Value << true;
+
             out << YAML::EndMap;
         }
 
@@ -63,6 +70,7 @@ public:
             return false;
 
         file << out.c_str();
+
         return true;
     }
 
@@ -82,54 +90,71 @@ public:
         if (!data["Scene"] || !data["Entities"] || !data["Entities"].IsSequence())
             return false;
 
-        registry.clear();
+        sceneSystem.Clear(registry);
 
-        for (const YAML::Node& entityNode : data["Entities"])
+        try
         {
-            if (!entityNode["Entity"] || !entityNode["Name"])
-                continue;
-
-            EntityID id = entityNode["Entity"].as<EntityID>();
-            std::string name = entityNode["Name"].as<std::string>();
-
-            entt::entity entity = sceneSystem.CreateEntity(registry, name, id);
-
-            if (YAML::Node transformNode = entityNode["Transform"])
+            for (const YAML::Node& entityNode : data["Entities"])
             {
-                TransformComponent& transform = registry.get<TransformComponent>(entity);
-                ReadFloat3(transformNode["Position"], transform.position);
-                ReadFloat4(transformNode["Rotation"], transform.rotation);
-                ReadFloat3(transformNode["Scale"], transform.scale);
+                if (!entityNode["Entity"] || !entityNode["Name"])
+                    continue;
+
+                EntityID id = entityNode["Entity"].as<EntityID>();
+                std::string name = entityNode["Name"].as<std::string>();
+
+                entt::entity entity = sceneSystem.CreateEntity(registry, name, id);
+
+                if (YAML::Node transformNode = entityNode["Transform"])
+                {
+                    TransformComponent& transform = registry.get<TransformComponent>(entity);
+
+                    ReadFloat3(transformNode["Position"], transform.position);
+                    ReadFloat4(transformNode["Rotation"], transform.rotation);
+                    ReadFloat3(transformNode["Scale"], transform.scale);
+                }
+
+                if (YAML::Node modelNode = entityNode["Model"])
+                {
+                    auto& model = registry.emplace<ModelComponent>(entity);
+
+                    if (modelNode["Asset"])
+                    {
+                        model.assetPath = modelNode["Asset"].as<std::string>();
+                        model.model = assetSystem.LoadModel(model.assetPath);
+                    }
+
+                    if (modelNode["Color"])
+                        ReadFloat4(modelNode["Color"], model.color);
+                }
+
+                if (YAML::Node cameraNode = entityNode["Camera"])
+                {
+                    auto& camera = registry.emplace<CameraComponent>(entity);
+
+                    if (cameraNode["FieldOfView"])
+                        camera.fieldOfView = cameraNode["FieldOfView"].as<float>();
+
+                    if (cameraNode["NearPlane"])
+                        camera.nearPlane = cameraNode["NearPlane"].as<float>();
+
+                    if (cameraNode["FarPlane"])
+                        camera.farPlane = cameraNode["FarPlane"].as<float>();
+
+                    if (cameraNode["Primary"] && cameraNode["Primary"].as<bool>())
+                        registry.emplace<PrimaryCameraComponent>(entity);
+                }
+
+                if (entityNode["Player"] && entityNode["Player"].as<bool>())
+                    registry.emplace<PlayerComponent>(entity);
+
+                if (entityNode["Boss"] && entityNode["Boss"].as<bool>())
+                    registry.emplace<BossComponent>(entity);
             }
-
-            if (YAML::Node modelNode = entityNode["Model"])
-            {
-                std::string assetPath = modelNode["Asset"].as<std::string>();
-
-                auto& model = registry.emplace<ModelComponent>(entity);
-                model.assetPath = assetPath;
-                model.model = assetSystem.LoadModel(assetPath);
-
-                if (modelNode["Color"])
-                    ReadFloat4(modelNode["Color"], model.color);
-            }
-
-            if (YAML::Node cameraNode = entityNode["Camera"])
-            {
-                auto& camera = registry.emplace<CameraComponent>(entity);
-
-                if (cameraNode["FieldOfView"])
-                    camera.fieldOfView = cameraNode["FieldOfView"].as<float>();
-
-                if (cameraNode["NearPlane"])
-                    camera.nearPlane = cameraNode["NearPlane"].as<float>();
-
-                if (cameraNode["FarPlane"])
-                    camera.farPlane = cameraNode["FarPlane"].as<float>();
-
-                if (cameraNode["Primary"] && cameraNode["Primary"].as<bool>())
-                    registry.emplace<PrimaryCameraComponent>(entity);
-            }
+        }
+        catch (const YAML::Exception&)
+        {
+            sceneSystem.Clear(registry);
+            return false;
         }
 
         return true;
@@ -154,6 +179,7 @@ private:
         value.x = node[0].as<float>();
         value.y = node[1].as<float>();
         value.z = node[2].as<float>();
+
         return true;
     }
 
@@ -166,6 +192,7 @@ private:
         value.y = node[1].as<float>();
         value.z = node[2].as<float>();
         value.w = node[3].as<float>();
+
         return true;
     }
 };

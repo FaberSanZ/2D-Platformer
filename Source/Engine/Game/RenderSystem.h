@@ -219,12 +219,32 @@ public:
 		if (instanceCount == 0)
 			return;
 
-		UpdateGpuData(m_instances, instances, instanceCount);
-
 		for (const Mesh& mesh : model.meshes)
 		{
 			for (const MeshPart& part : mesh.parts)
 			{
+				DirectX::XMFLOAT4 materialColor{ 1.0f, 1.0f, 1.0f, 1.0f };
+
+				if (part.material)
+					materialColor = part.material->baseColor;
+
+				std::vector<InstanceData> materialInstances(instanceCount);
+
+				for (uint32_t i = 0; i < instanceCount; ++i)
+				{
+					materialInstances[i] = instances[i];
+
+					materialInstances[i].baseColor =
+					{
+						instances[i].baseColor.x * materialColor.x,
+						instances[i].baseColor.y * materialColor.y,
+						instances[i].baseColor.z * materialColor.z,
+						instances[i].baseColor.w * materialColor.w
+					};
+				}
+
+				UpdateGpuData(m_instances, materialInstances.data(), instanceCount);
+
 				uint32_t nodeIndex = 0;
 
 				if (part.node)
@@ -277,7 +297,6 @@ public:
 			}
 		}
 	}
-
 	void DrawTestTriangle()
 	{
 

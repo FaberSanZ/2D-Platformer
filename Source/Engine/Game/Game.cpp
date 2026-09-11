@@ -54,13 +54,6 @@ protected:
         SetBossState(registry, BossState::Idle);
 
         UpdateThirdPersonCamera(registry);
-
-        Serializer().Save(registry, "../Assets/Scenes/TestScene.yaml", "TestScene");
-
-        entt::registry testRegistry;
-
-        if (Serializer().Load(testRegistry, Scene(), Assets(), "../Assets/Scenes/TestScene.yaml"))
-            Serializer().Save(testRegistry, "../Assets/Scenes/TestScene_RoundTrip.yaml", "TestScene");
     }
 
     void OnUpdate(entt::registry& registry, float deltaTime) override
@@ -73,6 +66,45 @@ protected:
         m_previousAttack = GameInput::IsMouseButtonDown(GameInput::MouseButton::Left);
         m_previousRoll = GameInput::IsKeyDown(GameInput::KeyCode::Space);
         m_previousDeath = GameInput::IsKeyDown(GameInput::KeyCode::T);
+    }
+
+
+    void OnSceneChanged(entt::registry& registry) override
+    {
+        m_player = entt::null;
+        m_boss = entt::null;
+        m_camera = entt::null;
+
+        auto playerView = registry.view<PlayerComponent>();
+
+        if (playerView.begin() != playerView.end())
+            m_player = *playerView.begin();
+
+        auto bossView = registry.view<BossComponent>();
+
+        if (bossView.begin() != bossView.end())
+            m_boss = *bossView.begin();
+
+        auto cameraView = registry.view<PrimaryCameraComponent>();
+
+        if (cameraView.begin() != cameraView.end())
+            m_camera = *cameraView.begin();
+
+        m_playerState = PlayerState::Death;
+        m_bossState = BossState::Death;
+
+        if (m_player != entt::null)
+            SetPlayerState(registry, PlayerState::Idle);
+
+        if (m_boss != entt::null)
+            SetBossState(registry, BossState::Idle);
+
+        m_previousAttack = GameInput::IsMouseButtonDown(GameInput::MouseButton::Left);
+        m_previousRoll = GameInput::IsKeyDown(GameInput::KeyCode::Space);
+        m_previousDeath = GameInput::IsKeyDown(GameInput::KeyCode::T);
+
+        if (m_player != entt::null && m_camera != entt::null)
+            UpdateThirdPersonCamera(registry);
     }
 
     void OnDestroy(entt::registry& registry) override
@@ -94,7 +126,9 @@ private:
         auto& model = registry.emplace<ModelComponent>(entity);
         model.model = m_knightModel;
         model.assetPath = "../Assets/Models/KnightCharacter.glb";
-        model.color = { 0.25f, 0.55f, 1.0f, 1.0f };
+        model.color = { 1.0f, 1.0f, 1.0f, 1.0f };
+
+        registry.emplace<PlayerComponent>(entity);
 
         return entity;
     }
@@ -113,6 +147,8 @@ private:
         model.model = m_spiderModel;
         model.assetPath = "../Assets/Models/Spider.glb";
         model.color = { 1.0f, 0.2f, 0.15f, 1.0f };
+
+        registry.emplace<BossComponent>(entity);
 
         return entity;
     }

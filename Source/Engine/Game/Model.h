@@ -81,6 +81,7 @@ struct AnimationClip
 
 struct Material
 {
+    DirectX::XMFLOAT4 baseColor{ 1.0f, 1.0f, 1.0f, 1.0f };
 };
 
 struct MeshPart
@@ -112,5 +113,3 @@ struct Model
     std::vector<Skin> skins;
     std::vector<AnimationClip> animations;
 };
-
-

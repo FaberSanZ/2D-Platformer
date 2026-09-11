@@ -1,9 +1,9 @@
 #pragma once
+
 #include <cstdint>
 #include <random>
+#include <string>
 #include <DirectXMath.h>
-
-
 
 using EntityID = uint64_t;
 
@@ -21,8 +21,6 @@ inline EntityID GenerateEntityID()
     return id;
 }
 
-
-
 struct IDComponent
 {
     EntityID id = 0;
@@ -33,14 +31,12 @@ struct NameComponent
     std::string name;
 };
 
-
 struct TransformComponent
 {
     DirectX::XMFLOAT3 position{ 0.0f, 0.0f, 0.0f };
     DirectX::XMFLOAT4 rotation{ 0.0f, 0.0f, 0.0f, 1.0f };
     DirectX::XMFLOAT3 scale{ 1.0f, 1.0f, 1.0f };
 };
-
 
 enum class BodyType
 {
@@ -52,11 +48,9 @@ enum class BodyType
 struct RigidBodyComponent
 {
     BodyType type = BodyType::Dynamic;
-
     DirectX::XMFLOAT3 linearVelocity{ 0.0f, 0.0f, 0.0f };
     DirectX::XMFLOAT3 linearAcceleration{ 0.0f, 0.0f, 0.0f };
 };
-
 
 struct CameraComponent
 {
@@ -69,6 +63,14 @@ struct PrimaryCameraComponent
 {
 };
 
+struct PlayerComponent
+{
+};
+
+struct BossComponent
+{
+};
+
 struct Model;
 
 struct ModelComponent
@@ -77,5 +79,3 @@ struct ModelComponent
     std::string assetPath;
     DirectX::XMFLOAT4 color{ 1.0f, 1.0f, 1.0f, 1.0f };
 };
-
-

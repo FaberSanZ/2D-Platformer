@@ -1,3 +1,5 @@
+#pragma once
+
 #include <entt/entt.hpp>
 #include <unordered_map>
 #include <vector>
@@ -18,136 +20,125 @@ using namespace Vultaik;
 class GameBase
 {
 public:
-	GameBase() = default;
+    GameBase() = default;
 
+    void Run()
+    {
+        CoInitializeEx(nullptr, COINIT_MULTITHREADED);
 
-	void Run()
-	{
-		CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        m_window.Initialize();
+        m_window.SetTitle(L"My game engine");
+        m_window.SetWindowSize(1640, 820);
 
-		m_window.Initialize();
-		m_window.SetTitle(L"My game engine");
-		m_window.SetWindowSize(1640, 820);
+        m_renderSystem.Initialize(m_window.Handle(), m_window.ClientWidth(), m_window.ClientHeight());
+        m_assetSystem.Initialize(&m_renderSystem);
+        m_editorSystem.Initialize(m_window.Handle(), m_renderSystem.Device(), m_renderSystem.Context());
 
+        m_gameTime.Reset();
+        m_physicsSystem.Initialize();
 
-		m_renderSystem.Initialize(m_window.Handle(), m_window.ClientWidth(), m_window.ClientHeight());
-		m_assetSystem.Initialize(&m_renderSystem);
-		m_editorSystem.Initialize(m_window.Handle(), m_renderSystem.Device(), m_renderSystem.Context());
+        OnInitialize(registry);
 
+        while (m_window.IsRunning())
+        {
+            m_window.PumpMessages();
+            m_gameTime.Update();
 
-		m_gameTime.Reset();
-		m_physicsSystem.Initialize();
-		OnInitialize(registry);
+            m_editorSystem.BeginFrame();
 
-		// Main game loop
-		while (m_window.IsRunning())
-		{
-			m_window.PumpMessages();
-			m_gameTime.Update();
+            OnUpdate(registry, m_gameTime.GetDeltaTime());
+            m_animationSystem.Update(registry, m_gameTime.GetDeltaTime());
+            m_physicsSystem.Update(registry, m_gameTime.GetDeltaTime());
 
-			m_editorSystem.BeginFrame();
+            float aspectRatio = static_cast<float>(m_window.ClientWidth()) / static_cast<float>(m_window.ClientHeight());
 
-			OnUpdate(registry, m_gameTime.GetDeltaTime());
-			m_animationSystem.Update(registry, m_gameTime.GetDeltaTime());
-			m_physicsSystem.Update(registry, m_gameTime.GetDeltaTime());
+            DirectX::XMMATRIX viewProjection = m_cameraSystem.GetViewProjection(registry, aspectRatio);
+            m_renderSystem.Update(viewProjection);
 
-			float aspectRatio = static_cast<float>(m_window.ClientWidth()) / static_cast<float>(m_window.ClientHeight());
+            m_renderSystem.BeginFrame();
 
-			DirectX::XMMATRIX viewProjection = m_cameraSystem.GetViewProjection(registry, aspectRatio);
-			m_renderSystem.Update(viewProjection);
+            Render();
 
-			m_renderSystem.BeginFrame();
+            EditorSceneAction sceneAction = m_editorSystem.Draw(registry, m_animationSystem, m_assetSystem, m_sceneSystem, m_sceneSerializer);
 
-			Render();
+            if (sceneAction != EditorSceneAction::None)
+                OnSceneChanged(registry);
 
-			m_editorSystem.Draw(registry, m_animationSystem);
-			m_editorSystem.EndFrame();
+            m_editorSystem.EndFrame();
+            m_renderSystem.EndFrame();
+        }
 
-			m_renderSystem.EndFrame();
-		}
+        OnDestroy(registry);
 
-		OnDestroy(registry);
+        m_editorSystem.Destroy();
+        m_renderSystem.Destroy();
 
-		CoUninitialize();
-	}
+        CoUninitialize();
+    }
 
 protected:
-	AssetSystem& Assets() { return m_assetSystem; }
-	RenderSystem& Renderer() { return m_renderSystem; }
-	PhysicsSystem& Physics() { return m_physicsSystem; }
-	CameraSystem& Camera() { return m_cameraSystem; }
-	AnimationSystem& Animations() { return m_animationSystem; }
-	SceneSystem& Scene() { return m_sceneSystem; }
-	SceneSerializer& Serializer() { return m_sceneSerializer; }
+    AssetSystem& Assets() { return m_assetSystem; }
+    RenderSystem& Renderer() { return m_renderSystem; }
+    PhysicsSystem& Physics() { return m_physicsSystem; }
+    CameraSystem& Camera() { return m_cameraSystem; }
+    AnimationSystem& Animations() { return m_animationSystem; }
+    SceneSystem& Scene() { return m_sceneSystem; }
+    SceneSerializer& Serializer() { return m_sceneSerializer; }
 
-	virtual void OnInitialize(entt::registry& registry) = 0;
-	virtual void OnUpdate(entt::registry& registry, float deltaTime) = 0;
-	virtual void OnDestroy(entt::registry& registry) = 0;
+    virtual void OnInitialize(entt::registry& registry) = 0;
+    virtual void OnUpdate(entt::registry& registry, float deltaTime) = 0;
+    virtual void OnDestroy(entt::registry& registry) = 0;
+    virtual void OnSceneChanged(entt::registry& registry) {}
 
 private:
-	GameWindow m_window;
-	GameTime m_gameTime;
+    GameWindow m_window;
+    GameTime m_gameTime;
 
-	RenderSystem m_renderSystem;
-	PhysicsSystem m_physicsSystem;
-	CameraSystem m_cameraSystem;
-	AssetSystem m_assetSystem;
-	AnimationSystem m_animationSystem;
-	EditorSystem m_editorSystem;
-	SceneSystem m_sceneSystem;
+    RenderSystem m_renderSystem;
+    PhysicsSystem m_physicsSystem;
+    CameraSystem m_cameraSystem;
+    AssetSystem m_assetSystem;
+    AnimationSystem m_animationSystem;
+    EditorSystem m_editorSystem;
+    SceneSystem m_sceneSystem;
+    SceneSerializer m_sceneSerializer;
 
+    entt::registry registry;
 
-	SceneSerializer m_sceneSerializer;
-	entt::registry registry;
+    void Render()
+    {
+        std::unordered_map<Model*, std::vector<InstanceData>> batches;
 
-	void Render()
-	{
-		std::unordered_map<Model*, std::vector<InstanceData>> batches;
+        auto view = registry.view<TransformComponent, ModelComponent>();
 
-		auto view = registry.view<TransformComponent, ModelComponent>();
+        for (auto [entity, transform, model] : view.each())
+        {
+            if (!model.model)
+                continue;
 
-		for (auto [entity, transform, model] : view.each())
-		{
-			if (!model.model)
-				continue;
+            DirectX::XMVECTOR rotation = DirectX::XMLoadFloat4(&transform.rotation);
 
-			DirectX::XMVECTOR rotation = DirectX::XMLoadFloat4(&transform.rotation);
+            InstanceData instance{};
 
-			InstanceData instance{};
+            instance.world = DirectX::XMMatrixTranspose(
+                DirectX::XMMatrixScaling(transform.scale.x, transform.scale.y, transform.scale.z) *
+                DirectX::XMMatrixRotationQuaternion(rotation) *
+                DirectX::XMMatrixTranslation(transform.position.x, transform.position.y, transform.position.z));
 
-			instance.world = DirectX::XMMatrixTranspose(
-				DirectX::XMMatrixScaling(transform.scale.x, transform.scale.y, transform.scale.z) *
-				DirectX::XMMatrixRotationQuaternion(rotation) *
-				DirectX::XMMatrixTranslation(transform.position.x, transform.position.y, transform.position.z));
+            instance.baseColor = model.color;
 
-			instance.baseColor = model.color;
+            AnimationComponent* animation = registry.try_get<AnimationComponent>(entity);
 
-			AnimationComponent* animation = registry.try_get<AnimationComponent>(entity);
+            if (animation && !animation->pose.empty())
+            {
+                m_renderSystem.DrawModel(*model.model, &instance, 1, &animation->pose);
+                continue;
+            }
 
-			if (animation && !animation->pose.empty())
-			{
-				m_renderSystem.DrawModel(*model.model, &instance, 1, &animation->pose);
-				continue;
-			}
+            batches[model.model].push_back(instance);
+        }
 
-			batches[model.model].push_back(instance);
-		}
-
-		for (auto& [model, instances] : batches)
-			m_renderSystem.DrawModel(*model, instances.data(), static_cast<uint32_t>(instances.size()));
-	}
-
-	void Update()
-	{
-
-	}
-
-
-
-	void Update2()
-	{
-
-	}
-
-
+        for (auto& [model, instances] : batches)
+            m_renderSystem.DrawModel(*model, instances.data(), static_cast<uint32_t>(instances.size()));
+    }
 };

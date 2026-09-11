@@ -1,6 +1,6 @@
 Scene: TestScene
 Entities:
-  - Entity: 7440194441414136816
+  - Entity: 9403117034476160343
     Name: Knight
     Transform:
       Position: [-4, 0, 0]
@@ -9,7 +9,7 @@ Entities:
     Model:
       Asset: ../Assets/Models/KnightCharacter.glb
       Color: [0.25, 0.550000012, 1, 1]
-  - Entity: 544343022419435532
+  - Entity: 1850780579673047301
     Name: Spider
     Transform:
       Position: [4, 0, 0]
@@ -18,7 +18,7 @@ Entities:
     Model:
       Asset: ../Assets/Models/Spider.glb
       Color: [1, 0.200000003, 0.150000006, 1]
-  - Entity: 16836636697090818869
+  - Entity: 3517664431708658020
     Name: Camera
     Transform:
       Position: [-13.7589722, 3.2177043, 8.94069672e-07]

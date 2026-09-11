@@ -1,12 +1,14 @@
 #pragma once
+
 #include <fastgltf/core.hpp>
 #include <fastgltf/types.hpp>
 #include <fastgltf/tools.hpp>
+#include <filesystem>
 #include <iostream>
-#include <variant>
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <variant>
 #include "Model.h"
 #include "RenderSystem.h"
 
@@ -17,6 +19,7 @@ public:
     {
         m_renderSystem = renderSystem;
     }
+
     Model* LoadModel(const std::string& filePath)
     {
         if (auto it = m_models.find(filePath); it != m_models.end())
@@ -25,10 +28,12 @@ public:
         std::filesystem::path path = filePath;
 
         auto data = fastgltf::GltfDataBuffer::FromPath(path);
+
         if (data.error() != fastgltf::Error::None)
             return nullptr;
 
         auto asset = m_parser.loadGltf(data.get(), path.parent_path(), fastgltf::Options::DecomposeNodeMatrices);
+
         if (asset.error() != fastgltf::Error::None)
             return nullptr;
 
@@ -63,6 +68,25 @@ public:
                 node.children.push_back(static_cast<uint32_t>(childIndex));
                 model->nodes[childIndex].parent = static_cast<int32_t>(i);
             }
+        }
+
+        // Materials.
+        model->materials.resize(asset->materials.size());
+
+        for (size_t i = 0; i < asset->materials.size(); ++i)
+        {
+            const auto& gltfMaterial = asset->materials[i];
+            const auto& color = gltfMaterial.pbrData.baseColorFactor;
+
+            Material& material = model->materials[i];
+
+            material.baseColor =
+            {
+                static_cast<float>(color[0]),
+                static_cast<float>(color[1]),
+                static_cast<float>(color[2]),
+                static_cast<float>(color[3])
+            };
         }
 
         // Skins.
@@ -229,6 +253,7 @@ public:
             for (const auto& primitive : gltfMesh.primitives)
             {
                 auto positionIt = primitive.findAttribute("POSITION");
+
                 if (positionIt == primitive.attributes.end())
                     continue;
 
@@ -318,6 +343,14 @@ public:
                 if (meshIndex < meshNodes.size())
                     part.node = meshNodes[meshIndex];
 
+                if (primitive.materialIndex.has_value())
+                {
+                    size_t materialIndex = primitive.materialIndex.value();
+
+                    if (materialIndex < model->materials.size())
+                        part.material = &model->materials[materialIndex];
+                }
+
                 m_renderSystem->UpdateGpuData(part.vertex, vertices.data(), static_cast<uint32_t>(vertices.size()));
 
                 mesh.parts.push_back(std::move(part));
@@ -331,6 +364,7 @@ public:
             return nullptr;
 
         std::cout << "Nodes: " << model->nodes.size() << std::endl;
+        std::cout << "Materials: " << model->materials.size() << std::endl;
         std::cout << "Skins: " << model->skins.size() << std::endl;
         std::cout << "Animations: " << model->animations.size() << std::endl;
 

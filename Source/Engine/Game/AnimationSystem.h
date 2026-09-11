@@ -68,7 +68,7 @@ public:
                     normalizedTime = animation.time / currentClip.duration;
             }
 
-            const bool canBlend = !animation.pose.empty() && animation.animationIndex < model.animations.size() && blendDuration > 0.0f;en
+            const bool canBlend = !animation.pose.empty() && animation.animationIndex < model.animations.size() && blendDuration > 0.0f;
 
             if (canBlend)
             {
