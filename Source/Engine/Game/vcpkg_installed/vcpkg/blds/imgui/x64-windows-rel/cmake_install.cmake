@@ -53,6 +53,10 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/include" TYPE FILE FILES "C:/Git/2D Engine v1/Source/Engine/Game/vcpkg_installed/vcpkg/blds/imgui/src/v1.91.9-afb09617a6.clean/backends/imgui_impl_dx12.h")
+endif()
+
+if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
   file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/include" TYPE FILE FILES "C:/Git/2D Engine v1/Source/Engine/Game/vcpkg_installed/vcpkg/blds/imgui/src/v1.91.9-afb09617a6.clean/backends/imgui_impl_win32.h")
 endif()
 

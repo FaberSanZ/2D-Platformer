@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Windows.h>
-#include <d3d11.h>
+#include <d3d12.h>
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
@@ -11,7 +11,7 @@
 #include <entt/entt.hpp>
 #include <imgui.h>
 #include <imgui_impl_win32.h>
-#include <imgui_impl_dx11.h>
+#include <imgui_impl_dx12.h>
 #include "Components.h"
 #include "AnimationSystem.h"
 #include "AssetSystem.h"
@@ -28,7 +28,7 @@ enum class EditorSceneAction
 class EditorSystem
 {
 public:
-    void Initialize(HWND window, ID3D11Device* device, ID3D11DeviceContext* context)
+    void Initialize(HWND window, ID3D12Device* device, ID3D12CommandQueue* commandQueue)
     {
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
@@ -38,8 +38,31 @@ public:
 
         ImGui::StyleColorsDark();
 
+        D3D12_DESCRIPTOR_HEAP_DESC heapDesc{};
+        heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+        heapDesc.NumDescriptors = 1;
+        heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+        device->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&m_srvDescriptorHeap));
+
         ImGui_ImplWin32_Init(window);
-        ImGui_ImplDX11_Init(device, context);
+
+        ImGui_ImplDX12_InitInfo initInfo{};
+        initInfo.Device = device;
+        initInfo.CommandQueue = commandQueue;
+        initInfo.NumFramesInFlight = 2;
+        initInfo.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+        initInfo.DSVFormat = DXGI_FORMAT_UNKNOWN;
+        initInfo.UserData = this;
+        initInfo.SrvDescriptorHeap = m_srvDescriptorHeap;
+        initInfo.SrvDescriptorAllocFn = [](ImGui_ImplDX12_InitInfo* info, D3D12_CPU_DESCRIPTOR_HANDLE* cpuHandle, D3D12_GPU_DESCRIPTOR_HANDLE* gpuHandle)
+            {
+                EditorSystem* editor = static_cast<EditorSystem*>(info->UserData);
+                *cpuHandle = editor->m_srvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+                *gpuHandle = editor->m_srvDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+            };
+        initInfo.SrvDescriptorFreeFn = [](ImGui_ImplDX12_InitInfo*, D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE) {};
+
+        ImGui_ImplDX12_Init(&initInfo);
 
         std::error_code error;
         std::filesystem::create_directories(m_sceneDirectory, error);
@@ -47,7 +70,7 @@ public:
 
     void BeginFrame()
     {
-        ImGui_ImplDX11_NewFrame();
+        ImGui_ImplDX12_NewFrame();
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
     }
@@ -99,17 +122,27 @@ public:
         return sceneAction;
     }
 
-    void EndFrame()
+    void EndFrame(ID3D12GraphicsCommandList* commandList)
     {
         ImGui::Render();
-        ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+
+        ID3D12DescriptorHeap* heaps[] = { m_srvDescriptorHeap };
+        commandList->SetDescriptorHeaps(1, heaps);
+
+        ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
     }
 
     void Destroy()
     {
-        ImGui_ImplDX11_Shutdown();
+        ImGui_ImplDX12_Shutdown();
         ImGui_ImplWin32_Shutdown();
         ImGui::DestroyContext();
+
+        if (m_srvDescriptorHeap)
+        {
+            m_srvDescriptorHeap->Release();
+            m_srvDescriptorHeap = nullptr;
+        }
     }
 
     bool WantsMouse() const
@@ -632,6 +665,8 @@ private:
     }
 
 private:
+    ID3D12DescriptorHeap* m_srvDescriptorHeap = nullptr;
+
     entt::entity m_selectedEntity = entt::null;
 
     uint32_t m_selectedClip = 0;

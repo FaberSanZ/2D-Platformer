@@ -338,7 +338,7 @@ public:
                 MeshPart part{};
 
                 part.vertex = m_renderSystem->CreateStructuredBuffer(sizeof(Vertex), static_cast<uint32_t>(vertices.size()));
-                part.index = m_renderSystem->CreateIndexBuffer(indices.data(), sizeof(uint32_t), static_cast<uint32_t>(indices.size()));
+                part.index = m_renderSystem->CreateStructuredBuffer(sizeof(uint32_t), static_cast<uint32_t>(indices.size()));
 
                 if (meshIndex < meshNodes.size())
                     part.node = meshNodes[meshIndex];
@@ -352,6 +352,7 @@ public:
                 }
 
                 m_renderSystem->UpdateGpuData(part.vertex, vertices.data(), static_cast<uint32_t>(vertices.size()));
+                m_renderSystem->UpdateGpuData(part.index, indices.data(), static_cast<uint32_t>(indices.size()));
 
                 mesh.parts.push_back(std::move(part));
             }

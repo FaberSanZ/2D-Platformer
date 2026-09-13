@@ -3,7 +3,7 @@ Version: 1.91.9
 Depends: vcpkg-cmake, vcpkg-cmake-config
 Architecture: x64-windows
 Multi-Arch: same
-Abi: 792769b5f830556e8fbbd8c862ad2e6e12a551444d65bfd5033f188df48119c6
+Abi: e4c62832b9cb4c681179a8fe44c3689b83a968dc66391e68002aa6e7ce681666
 Description: Bloat-free Immediate Mode Graphical User interface for C++ with minimal dependencies.
 
 Package: imgui
@@ -11,6 +11,12 @@ Feature: dx11-binding
 Architecture: x64-windows
 Multi-Arch: same
 Description: Make available DirectX11 binding
+
+Package: imgui
+Feature: dx12-binding
+Architecture: x64-windows
+Multi-Arch: same
+Description: Make available DirectX12 binding
 
 Package: imgui
 Feature: win32-binding

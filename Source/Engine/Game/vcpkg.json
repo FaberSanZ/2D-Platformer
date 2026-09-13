@@ -6,7 +6,8 @@
       "name": "imgui",
       "features": [
         "dx11-binding",
-        "win32-binding"
+        "win32-binding",
+        "dx12-binding"
       ]
     },
     "yaml-cpp"

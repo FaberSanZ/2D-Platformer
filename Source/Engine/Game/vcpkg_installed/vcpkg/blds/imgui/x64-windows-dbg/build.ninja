@@ -119,6 +119,16 @@ build CMakeFiles\imgui.dir\backends\imgui_impl_dx11.cpp.obj: CXX_COMPILER__imgui
   TARGET_PDB = imguid.pdb
   TARGET_SUPPORT_DIR = CMakeFiles\imgui.dir
 
+build CMakeFiles\imgui.dir\backends\imgui_impl_dx12.cpp.obj: CXX_COMPILER__imgui_unscanned_Debug C$:\Git\2D$ Engine$ v1\Source\Engine\Game\vcpkg_installed\vcpkg\blds\imgui\src\v1.91.9-afb09617a6.clean\backends\imgui_impl_dx12.cpp || cmake_object_order_depends_target_imgui
+  CONFIG = Debug
+  FLAGS = /nologo /DWIN32 /D_WINDOWS /utf-8 /GR /EHsc /MP  /MDd /Z7 /Ob0 /Od /RTC1  -MDd
+  INCLUDES = -I"C:\Git\2D Engine v1\Source\Engine\Game\vcpkg_installed\vcpkg\blds\imgui\src\v1.91.9-afb09617a6.clean" -I"C:\Git\2D Engine v1\Source\Engine\Game\vcpkg_installed\vcpkg\blds\imgui\src\v1.91.9-afb09617a6.clean\test-engine"
+  OBJECT_DIR = CMakeFiles\imgui.dir
+  OBJECT_FILE_DIR = CMakeFiles\imgui.dir\backends
+  TARGET_COMPILE_PDB = CMakeFiles\imgui.dir\imgui.pdb
+  TARGET_PDB = imguid.pdb
+  TARGET_SUPPORT_DIR = CMakeFiles\imgui.dir
+
 build CMakeFiles\imgui.dir\backends\imgui_impl_win32.cpp.obj: CXX_COMPILER__imgui_unscanned_Debug C$:\Git\2D$ Engine$ v1\Source\Engine\Game\vcpkg_installed\vcpkg\blds\imgui\src\v1.91.9-afb09617a6.clean\backends\imgui_impl_win32.cpp || cmake_object_order_depends_target_imgui
   CONFIG = Debug
   FLAGS = /nologo /DWIN32 /D_WINDOWS /utf-8 /GR /EHsc /MP  /MDd /Z7 /Ob0 /Od /RTC1  -MDd
@@ -137,7 +147,7 @@ build CMakeFiles\imgui.dir\backends\imgui_impl_win32.cpp.obj: CXX_COMPILER__imgu
 #############################################
 # Link the static library imguid.lib
 
-build imguid.lib: CXX_STATIC_LIBRARY_LINKER__imgui_Debug CMakeFiles\imgui.dir\imgui.cpp.obj CMakeFiles\imgui.dir\imgui_demo.cpp.obj CMakeFiles\imgui.dir\imgui_draw.cpp.obj CMakeFiles\imgui.dir\imgui_tables.cpp.obj CMakeFiles\imgui.dir\imgui_widgets.cpp.obj CMakeFiles\imgui.dir\misc\cpp\imgui_stdlib.cpp.obj CMakeFiles\imgui.dir\backends\imgui_impl_dx11.cpp.obj CMakeFiles\imgui.dir\backends\imgui_impl_win32.cpp.obj
+build imguid.lib: CXX_STATIC_LIBRARY_LINKER__imgui_Debug CMakeFiles\imgui.dir\imgui.cpp.obj CMakeFiles\imgui.dir\imgui_demo.cpp.obj CMakeFiles\imgui.dir\imgui_draw.cpp.obj CMakeFiles\imgui.dir\imgui_tables.cpp.obj CMakeFiles\imgui.dir\imgui_widgets.cpp.obj CMakeFiles\imgui.dir\misc\cpp\imgui_stdlib.cpp.obj CMakeFiles\imgui.dir\backends\imgui_impl_dx11.cpp.obj CMakeFiles\imgui.dir\backends\imgui_impl_dx12.cpp.obj CMakeFiles\imgui.dir\backends\imgui_impl_win32.cpp.obj
   CONFIG = Debug
   LANGUAGE_COMPILE_FLAGS = /nologo /DWIN32 /D_WINDOWS /utf-8 /GR /EHsc /MP  /MDd /Z7 /Ob0 /Od /RTC1  -MDd
   LINK_FLAGS = /machine:x64 /nologo

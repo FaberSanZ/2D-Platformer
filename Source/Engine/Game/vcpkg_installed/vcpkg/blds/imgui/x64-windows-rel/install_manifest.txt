@@ -7,6 +7,7 @@ C:/Git/2D Engine v1/Source/Engine/Game/vcpkg_installed/vcpkg/pkgs/imgui_x64-wind
 C:/Git/2D Engine v1/Source/Engine/Game/vcpkg_installed/vcpkg/pkgs/imgui_x64-windows/include/imstb_truetype.h
 C:/Git/2D Engine v1/Source/Engine/Game/vcpkg_installed/vcpkg/pkgs/imgui_x64-windows/include/imgui_stdlib.h
 C:/Git/2D Engine v1/Source/Engine/Game/vcpkg_installed/vcpkg/pkgs/imgui_x64-windows/include/imgui_impl_dx11.h
+C:/Git/2D Engine v1/Source/Engine/Game/vcpkg_installed/vcpkg/pkgs/imgui_x64-windows/include/imgui_impl_dx12.h
 C:/Git/2D Engine v1/Source/Engine/Game/vcpkg_installed/vcpkg/pkgs/imgui_x64-windows/include/imgui_impl_win32.h
 C:/Git/2D Engine v1/Source/Engine/Game/vcpkg_installed/vcpkg/pkgs/imgui_x64-windows/share/imgui/imgui-config.cmake
 C:/Git/2D Engine v1/Source/Engine/Game/vcpkg_installed/vcpkg/pkgs/imgui_x64-windows/share/imgui/imgui-targets.cmake

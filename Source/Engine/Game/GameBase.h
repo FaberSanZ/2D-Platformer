@@ -32,7 +32,7 @@ public:
 
         m_renderSystem.Initialize(m_window.Handle(), m_window.ClientWidth(), m_window.ClientHeight());
         m_assetSystem.Initialize(&m_renderSystem);
-        m_editorSystem.Initialize(m_window.Handle(), m_renderSystem.Device(), m_renderSystem.Context());
+        m_editorSystem.Initialize(m_window.Handle(), m_renderSystem.Device(), m_renderSystem.CommandQueue());
 
         m_gameTime.Reset();
         m_physicsSystem.Initialize();
@@ -64,7 +64,8 @@ public:
             if (sceneAction != EditorSceneAction::None)
                 OnSceneChanged(registry);
 
-            m_editorSystem.EndFrame();
+            m_renderSystem.BeginEditor();
+            m_editorSystem.EndFrame(m_renderSystem.CommandList());
             m_renderSystem.EndFrame();
         }
 

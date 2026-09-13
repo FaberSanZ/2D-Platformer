@@ -3183,8 +3183,8 @@ events:
     checks:
       - "Detecting CXX compiler ABI info"
     directories:
-      source: "C:/Git/2D Engine v1/Source/Engine/Game/vcpkg_installed/vcpkg/blds/imgui/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-kzsi5x"
-      binary: "C:/Git/2D Engine v1/Source/Engine/Game/vcpkg_installed/vcpkg/blds/imgui/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-kzsi5x"
+      source: "C:/Git/2D Engine v1/Source/Engine/Game/vcpkg_installed/vcpkg/blds/imgui/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-w65o5q"
+      binary: "C:/Git/2D Engine v1/Source/Engine/Game/vcpkg_installed/vcpkg/blds/imgui/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-w65o5q"
     cmakeVariables:
       CMAKE_CXX_FLAGS: " /nologo /DWIN32 /D_WINDOWS /utf-8 /GR /EHsc /MP "
       CMAKE_CXX_FLAGS_DEBUG: "/MDd /Z7 /Ob0 /Od /RTC1 "
@@ -3215,11 +3215,11 @@ events:
       variable: "CMAKE_CXX_ABI_COMPILED"
       cached: true
       stdout: |
-        Change Dir: 'C:/Git/2D Engine v1/Source/Engine/Game/vcpkg_installed/vcpkg/blds/imgui/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-kzsi5x'
+        Change Dir: 'C:/Git/2D Engine v1/Source/Engine/Game/vcpkg_installed/vcpkg/blds/imgui/x64-windows-rel/CMakeFiles/CMakeScratch/TryCompile-w65o5q'
         
-        Run Build Command(s): C:/Users/USUARIO/AppData/Local/vcpkg/downloads/tools/ninja/1.13.1-windows/ninja.exe -v cmTC_2d40b
-        [1/2] C:\\PROGRA~1\\MICROS~3\\2022\\COMMUN~1\\VC\\Tools\\MSVC\\1444~1.352\\bin\\Hostx64\\x64\\cl.exe  /nologo /TP -D_MBCS  /nologo /DWIN32 /D_WINDOWS /utf-8 /GR /EHsc /MP   /MDd /Z7 /Ob0 /Od /RTC1  -MDd /showIncludes /FoCMakeFiles\\cmTC_2d40b.dir\\CMakeCXXCompilerABI.cpp.obj /FdCMakeFiles\\cmTC_2d40b.dir\\ /FS -c "C:\\Program Files\\CMake\\share\\cmake-4.3\\Modules\\CMakeCXXCompilerABI.cpp"
-        [2/2] C:\\WINDOWS\\system32\\cmd.exe /C "cd . && "C:\\Program Files\\CMake\\bin\\cmake.exe" -E vs_link_exe --msvc-ver=1944 --intdir=CMakeFiles\\cmTC_2d40b.dir --rc=C:\\PROGRA~2\\WI3CF2~1\\10\\bin\\100261~1.0\\x64\\rc.exe --mt=C:\\PROGRA~2\\WI3CF2~1\\10\\bin\\100261~1.0\\x64\\mt.exe --manifests  -- C:\\PROGRA~1\\MICROS~3\\2022\\COMMUN~1\\VC\\Tools\\MSVC\\1444~1.352\\bin\\Hostx64\\x64\\link.exe /nologo CMakeFiles\\cmTC_2d40b.dir\\CMakeCXXCompilerABI.cpp.obj  /out:cmTC_2d40b.exe /implib:cmTC_2d40b.lib /pdb:cmTC_2d40b.pdb /version:0.0 /machine:x64 /nologo /debug /INCREMENTAL /subsystem:console  kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib && cd ."
+        Run Build Command(s): C:/Users/USUARIO/AppData/Local/vcpkg/downloads/tools/ninja/1.13.1-windows/ninja.exe -v cmTC_d425e
+        [1/2] C:\\PROGRA~1\\MICROS~3\\2022\\COMMUN~1\\VC\\Tools\\MSVC\\1444~1.352\\bin\\Hostx64\\x64\\cl.exe  /nologo /TP -D_MBCS  /nologo /DWIN32 /D_WINDOWS /utf-8 /GR /EHsc /MP   /MDd /Z7 /Ob0 /Od /RTC1  -MDd /showIncludes /FoCMakeFiles\\cmTC_d425e.dir\\CMakeCXXCompilerABI.cpp.obj /FdCMakeFiles\\cmTC_d425e.dir\\ /FS -c "C:\\Program Files\\CMake\\share\\cmake-4.3\\Modules\\CMakeCXXCompilerABI.cpp"
+        [2/2] C:\\WINDOWS\\system32\\cmd.exe /C "cd . && "C:\\Program Files\\CMake\\bin\\cmake.exe" -E vs_link_exe --msvc-ver=1944 --intdir=CMakeFiles\\cmTC_d425e.dir --rc=C:\\PROGRA~2\\WI3CF2~1\\10\\bin\\100261~1.0\\x64\\rc.exe --mt=C:\\PROGRA~2\\WI3CF2~1\\10\\bin\\100261~1.0\\x64\\mt.exe --manifests  -- C:\\PROGRA~1\\MICROS~3\\2022\\COMMUN~1\\VC\\Tools\\MSVC\\1444~1.352\\bin\\Hostx64\\x64\\link.exe /nologo CMakeFiles\\cmTC_d425e.dir\\CMakeCXXCompilerABI.cpp.obj  /out:cmTC_d425e.exe /implib:cmTC_d425e.lib /pdb:cmTC_d425e.pdb /version:0.0 /machine:x64 /nologo /debug /INCREMENTAL /subsystem:console  kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib && cd ."
         
       exitCode: 0
   -

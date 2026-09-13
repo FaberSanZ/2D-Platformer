@@ -6,6 +6,7 @@ x64-windows/include/
 x64-windows/include/imconfig.h
 x64-windows/include/imgui.h
 x64-windows/include/imgui_impl_dx11.h
+x64-windows/include/imgui_impl_dx12.h
 x64-windows/include/imgui_impl_win32.h
 x64-windows/include/imgui_internal.h
 x64-windows/include/imgui_stdlib.h
