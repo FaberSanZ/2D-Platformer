@@ -29,7 +29,7 @@ public:
         ImGuiIO& io = ImGui::GetIO();
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
-        ImGui::StyleColorsDark();
+        ImGui::StyleColorsClassic();
 
         D3D12_DESCRIPTOR_HEAP_DESC heapDesc{};
         heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
