@@ -18,13 +18,6 @@
 #include "SceneSystem.h"
 #include "SceneSerializer.h"
 
-enum class EditorSceneAction
-{
-    None,
-    New,
-    Load
-};
-
 class EditorSystem
 {
 public:
@@ -75,12 +68,15 @@ public:
         ImGui::NewFrame();
     }
 
-    EditorSceneAction Draw(entt::registry& registry, AnimationSystem& animations, AssetSystem& assets, SceneSystem& sceneSystem, SceneSerializer& serializer)
+    void Draw(AnimationSystem& animations, AssetSystem& assets, SceneSystem& sceneSystem, SceneSerializer& serializer)
     {
+        HandleActiveSceneChange(sceneSystem);
+
         ImGui::SetNextWindowSize(ImVec2(1100.0f, 620.0f), ImGuiCond_FirstUseEver);
         ImGui::Begin("Soulslike Editor");
 
-        EditorSceneAction sceneAction = DrawSceneToolbar(registry, assets, sceneSystem, serializer);
+        DrawSceneToolbar(assets, sceneSystem, serializer);
+        HandleActiveSceneChange(sceneSystem);
 
         ImGui::Text("FPS %.1f", ImGui::GetIO().Framerate);
         ImGui::SameLine();
@@ -100,26 +96,31 @@ public:
             ImGui::TableSetupColumn("Inspector", ImGuiTableColumnFlags_WidthStretch);
 
             ImGui::TableNextColumn();
+            DrawSceneBrowser(assets, sceneSystem, serializer);
+            HandleActiveSceneChange(sceneSystem);
 
-            EditorSceneAction browserAction = DrawSceneBrowser(registry, assets, sceneSystem, serializer);
-
-            if (browserAction != EditorSceneAction::None)
-                sceneAction = browserAction;
-
-            ImGui::TableNextColumn();
-            DrawHierarchy(registry, sceneSystem);
+            Scene* activeScene = sceneSystem.GetActiveScene();
 
             ImGui::TableNextColumn();
-            DrawInspector(registry, animations, assets, sceneSystem);
+
+            if (activeScene)
+                DrawHierarchy(activeScene->registry);
+            else
+                ImGui::TextDisabled("No active scene.");
+
+            ImGui::TableNextColumn();
+
+            if (activeScene)
+                DrawInspector(activeScene->registry, animations, assets, serializer);
+            else
+                ImGui::TextDisabled("No active scene.");
 
             ImGui::EndTable();
         }
 
-        DrawNewScenePopup(registry, sceneSystem, serializer, sceneAction);
+        DrawNewScenePopup(sceneSystem, serializer);
 
         ImGui::End();
-
-        return sceneAction;
     }
 
     void EndFrame(ID3D12GraphicsCommandList* commandList)
@@ -156,10 +157,8 @@ public:
     }
 
 private:
-    EditorSceneAction DrawSceneToolbar(entt::registry& registry, AssetSystem& assets, SceneSystem& sceneSystem, SceneSerializer& serializer)
+    void DrawSceneToolbar(AssetSystem& assets, SceneSystem& sceneSystem, SceneSerializer& serializer)
     {
-        EditorSceneAction action = EditorSceneAction::None;
-
         if (ImGui::Button("New Scene"))
         {
             m_newSceneNameBuffer[0] = '\0';
@@ -169,23 +168,40 @@ private:
         ImGui::SameLine();
 
         if (ImGui::Button("Load Scene"))
-        {
-            if (LoadCurrentScene(registry, assets, sceneSystem, serializer))
-                action = EditorSceneAction::Load;
-        }
+            LoadSelectedScene(assets, sceneSystem, serializer);
 
         ImGui::SameLine();
 
         if (ImGui::Button("Save Scene"))
         {
-            if (serializer.Save(registry, m_scenePath, m_sceneName))
-                m_sceneStatus = "Scene saved";
+            Scene* activeScene = sceneSystem.GetActiveScene();
+
+            if (!activeScene)
+            {
+                m_sceneStatus = "No active scene";
+            }
             else
-                m_sceneStatus = "Save failed";
+            {
+                std::filesystem::path scenePath = std::filesystem::path(m_sceneDirectory) / (activeScene->name + ".yaml");
+
+                if (serializer.Save(*activeScene, scenePath.string()))
+                {
+                    m_selectedScenePath = scenePath.string();
+                    m_sceneStatus = "Scene saved";
+                }
+                else
+                {
+                    m_sceneStatus = "Save failed";
+                }
+            }
         }
 
         ImGui::SameLine();
-        ImGui::TextDisabled("%s", m_sceneName.c_str());
+
+        if (Scene* activeScene = sceneSystem.GetActiveScene())
+            ImGui::TextDisabled("%s", activeScene->name.c_str());
+        else
+            ImGui::TextDisabled("No active scene");
 
         if (!m_sceneStatus.empty())
         {
@@ -194,11 +210,9 @@ private:
         }
 
         ImGui::Separator();
-
-        return action;
     }
 
-    EditorSceneAction DrawSceneBrowser(entt::registry& registry, AssetSystem& assets, SceneSystem& sceneSystem, SceneSerializer& serializer)
+    void DrawSceneBrowser(AssetSystem& assets, SceneSystem& sceneSystem, SceneSerializer& serializer)
     {
         ImGui::Text("Scenes");
         ImGui::Separator();
@@ -208,40 +222,34 @@ private:
         if (scenes.empty())
         {
             ImGui::TextDisabled("No scenes.");
-            return EditorSceneAction::None;
+            return;
         }
 
         for (const std::filesystem::path& path : scenes)
         {
             std::string fileName = path.filename().string();
-            bool selected = std::filesystem::path(m_scenePath).lexically_normal() == path.lexically_normal();
+            bool selected = std::filesystem::path(m_selectedScenePath).lexically_normal() == path.lexically_normal();
 
             ImGui::PushID(fileName.c_str());
 
             if (ImGui::Selectable(fileName.c_str(), selected, ImGuiSelectableFlags_AllowDoubleClick))
             {
-                m_scenePath = path.string();
-                m_sceneName = path.stem().string();
+                m_selectedScenePath = path.string();
                 m_sceneStatus = "Scene selected";
 
                 if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
                 {
                     ImGui::PopID();
-
-                    if (LoadCurrentScene(registry, assets, sceneSystem, serializer))
-                        return EditorSceneAction::Load;
-
-                    return EditorSceneAction::None;
+                    LoadScene(path, assets, sceneSystem, serializer);
+                    return;
                 }
             }
 
             ImGui::PopID();
         }
-
-        return EditorSceneAction::None;
     }
 
-    void DrawNewScenePopup(entt::registry& registry, SceneSystem& sceneSystem, SceneSerializer& serializer, EditorSceneAction& sceneAction)
+    void DrawNewScenePopup(SceneSystem& sceneSystem, SceneSerializer& serializer)
     {
         if (!ImGui::BeginPopupModal("New Scene", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
             return;
@@ -258,22 +266,32 @@ private:
 
         if (ImGui::Button("Create", ImVec2(120.0f, 0.0f)))
         {
-            m_sceneName = m_newSceneNameBuffer;
+            std::string sceneName = m_newSceneNameBuffer;
+            std::filesystem::path scenePath = std::filesystem::path(m_sceneDirectory) / (sceneName + ".yaml");
 
-            std::filesystem::path scenePath = std::filesystem::path(m_sceneDirectory) / (m_sceneName + ".yaml");
-            m_scenePath = scenePath.string();
-
-            sceneSystem.Clear(registry);
-            ClearSelection();
-
-            if (serializer.Save(registry, m_scenePath, m_sceneName))
-                m_sceneStatus = "Scene created";
+            if (sceneSystem.GetScene(sceneName) || std::filesystem::exists(scenePath))
+            {
+                m_sceneStatus = "Scene already exists";
+            }
             else
-                m_sceneStatus = "Scene created, save failed";
+            {
+                Scene& scene = sceneSystem.CreateScene(sceneName);
+                sceneSystem.SetActiveScene(sceneName);
 
-            sceneAction = EditorSceneAction::New;
+                ClearSelection();
 
-            ImGui::CloseCurrentPopup();
+                if (serializer.Save(scene, scenePath.string()))
+                {
+                    m_selectedScenePath = scenePath.string();
+                    m_sceneStatus = "Scene created";
+                }
+                else
+                {
+                    m_sceneStatus = "Scene created, save failed";
+                }
+
+                ImGui::CloseCurrentPopup();
+            }
         }
 
         if (!validName)
@@ -287,24 +305,44 @@ private:
         ImGui::EndPopup();
     }
 
-    bool LoadCurrentScene(entt::registry& registry, AssetSystem& assets, SceneSystem& sceneSystem, SceneSerializer& serializer)
+    bool LoadSelectedScene(AssetSystem& assets, SceneSystem& sceneSystem, SceneSerializer& serializer)
     {
-        if (m_scenePath.empty())
+        if (m_selectedScenePath.empty())
         {
             m_sceneStatus = "Select a scene";
             return false;
         }
 
-        if (!serializer.Load(registry, sceneSystem, assets, m_scenePath))
+        return LoadScene(m_selectedScenePath, assets, sceneSystem, serializer);
+    }
+
+    bool LoadScene(const std::filesystem::path& path, AssetSystem& assets, SceneSystem& sceneSystem, SceneSerializer& serializer)
+    {
+        std::string sceneName = path.stem().string();
+        Scene* scene = sceneSystem.GetScene(sceneName);
+        bool created = false;
+
+        if (!scene)
         {
+            scene = &sceneSystem.CreateScene(sceneName);
+            created = true;
+        }
+
+        if (!serializer.Load(*scene, assets, path.string()))
+        {
+            if (created)
+                sceneSystem.DestroyScene(sceneName);
+
             m_sceneStatus = "Load failed";
             return false;
         }
 
-        ClearSelection();
+        sceneSystem.SetActiveScene(sceneName);
 
-        m_sceneName = std::filesystem::path(m_scenePath).stem().string();
+        m_selectedScenePath = path.string();
         m_sceneStatus = "Scene loaded";
+
+        ClearSelection();
 
         return true;
     }
@@ -340,14 +378,19 @@ private:
         return scenes;
     }
 
-    void DrawHierarchy(entt::registry& registry, SceneSystem& sceneSystem)
+    void DrawHierarchy(entt::registry& registry)
     {
         ImGui::Text("Hierarchy");
         ImGui::SameLine();
 
         if (ImGui::Button("+ Entity"))
         {
-            entt::entity entity = sceneSystem.CreateEntity(registry, "Entity");
+            entt::entity entity = registry.create();
+
+            registry.emplace<IDComponent>(entity, IDComponent{ GenerateEntityID() });
+            registry.emplace<NameComponent>(entity, NameComponent{ "Entity" });
+            registry.emplace<TransformComponent>(entity);
+
             SelectEntity(registry, entity);
         }
 
@@ -371,7 +414,7 @@ private:
         }
     }
 
-    void DrawInspector(entt::registry& registry, AnimationSystem& animations, AssetSystem& assets, SceneSystem& sceneSystem)
+    void DrawInspector(entt::registry& registry, AnimationSystem& animations, AssetSystem& assets, SceneSerializer& serializer)
     {
         ImGui::Text("Inspector");
         ImGui::Separator();
@@ -382,19 +425,37 @@ private:
             return;
         }
 
-        DrawEntity(registry, sceneSystem);
+        DrawEntity(registry);
 
         if (m_selectedEntity == entt::null || !registry.valid(m_selectedEntity))
             return;
 
         DrawTransform(registry);
         DrawAddComponent(registry);
+        DrawGameTags(registry, serializer);
         DrawModel(registry, assets);
         DrawCamera(registry);
         DrawAnimation(registry, animations);
     }
 
-    void DrawEntity(entt::registry& registry, SceneSystem& sceneSystem)
+
+    void DrawGameTags(entt::registry& registry, SceneSerializer& serializer)
+    {
+        if (serializer.GetTagCount() == 0)
+            return;
+
+        ImGui::SeparatorText("Game Tags");
+
+        for (size_t i = 0; i < serializer.GetTagCount(); ++i)
+        {
+            bool enabled = serializer.HasTag(i, registry, m_selectedEntity);
+
+            if (ImGui::Checkbox(serializer.GetTagName(i).c_str(), &enabled))
+                serializer.SetTag(i, registry, m_selectedEntity, enabled);
+        }
+    }
+
+    void DrawEntity(entt::registry& registry)
     {
         NameComponent* name = registry.try_get<NameComponent>(m_selectedEntity);
         IDComponent* id = registry.try_get<IDComponent>(m_selectedEntity);
@@ -411,7 +472,9 @@ private:
 
         if (ImGui::Button("Delete Entity"))
         {
-            sceneSystem.DestroyEntity(registry, m_selectedEntity);
+            if (registry.valid(m_selectedEntity))
+                registry.destroy(m_selectedEntity);
+
             ClearSelection();
         }
     }
@@ -633,6 +696,17 @@ private:
         ImGui::Text("Pose Nodes: %u", static_cast<uint32_t>(animation->pose.size()));
     }
 
+    void HandleActiveSceneChange(SceneSystem& sceneSystem)
+    {
+        Scene* activeScene = sceneSystem.GetActiveScene();
+
+        if (activeScene == m_lastActiveScene)
+            return;
+
+        m_lastActiveScene = activeScene;
+        ClearSelection();
+    }
+
     void SelectEntity(entt::registry& registry, entt::entity entity)
     {
         m_selectedEntity = entity;
@@ -667,6 +741,7 @@ private:
 private:
     ID3D12DescriptorHeap* m_srvDescriptorHeap = nullptr;
 
+    Scene* m_lastActiveScene = nullptr;
     entt::entity m_selectedEntity = entt::null;
 
     uint32_t m_selectedClip = 0;
@@ -680,7 +755,6 @@ private:
     std::string m_modelStatus;
 
     std::string m_sceneDirectory = "../Assets/Scenes";
-    std::string m_sceneName = "TestScene";
-    std::string m_scenePath = "../Assets/Scenes/TestScene.yaml";
+    std::string m_selectedScenePath;
     std::string m_sceneStatus;
 };

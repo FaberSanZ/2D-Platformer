@@ -83,7 +83,7 @@ protected:
 private:
     entt::entity CreateKnight(entt::registry& registry, const DirectX::XMFLOAT3& position)
     {
-        entt::entity entity = Scene().CreateEntity(registry, "Knight");
+        entt::entity entity = CreateEntity(registry, "Knight");
 
         auto& transform = registry.get<TransformComponent>(entity);
         transform.position = position;
@@ -103,7 +103,7 @@ private:
 
     entt::entity CreateSpider(entt::registry& registry, const DirectX::XMFLOAT3& position)
     {
-        entt::entity entity = Scene().CreateEntity(registry, "Spider");
+        entt::entity entity = CreateEntity(registry, "Spider");
 
         auto& transform = registry.get<TransformComponent>(entity);
         transform.position = position;
@@ -123,7 +123,7 @@ private:
 
     entt::entity CreateCamera(entt::registry& registry)
     {
-        entt::entity entity = Scene().CreateEntity(registry, "Camera");
+        entt::entity entity = CreateEntity(registry, "Camera");
 
         auto& transform = registry.get<TransformComponent>(entity);
         transform.position = { -10.0f, 3.0f, 0.0f };
@@ -278,11 +278,11 @@ private:
     void UpdateBoss(entt::registry& registry, float deltaTime)
     {
         auto playerView = registry.view<PlayerComponent, TransformComponent>();
+        entt::entity playerEntity = playerView.front();
 
-        if (playerView.begin() == playerView.end())
+        if (playerEntity == entt::null)
             return;
 
-        entt::entity playerEntity = *playerView.begin();
         const TransformComponent& playerTransform = registry.get<TransformComponent>(playerEntity);
 
         auto bossView = registry.view<BossComponent, TransformComponent>();
@@ -430,17 +430,16 @@ private:
     void UpdateThirdPersonCamera(entt::registry& registry)
     {
         auto playerView = registry.view<PlayerComponent, TransformComponent>();
+        entt::entity playerEntity = playerView.front();
 
-        if (playerView.begin() == playerView.end())
+        if (playerEntity == entt::null)
             return;
 
         auto cameraView = registry.view<PrimaryCameraComponent, TransformComponent>();
+        entt::entity cameraEntity = cameraView.front();
 
-        if (cameraView.begin() == cameraView.end())
+        if (cameraEntity == entt::null)
             return;
-
-        entt::entity playerEntity = *playerView.begin();
-        entt::entity cameraEntity = *cameraView.begin();
 
         const TransformComponent& playerTransform = registry.get<TransformComponent>(playerEntity);
         TransformComponent& cameraTransform = registry.get<TransformComponent>(cameraEntity);

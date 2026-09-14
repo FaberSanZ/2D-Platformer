@@ -1,6 +1,7 @@
 #pragma once
 
 #include <entt/entt.hpp>
+#include <string>
 #include <unordered_map>
 #include <vector>
 #include "GameWindow.h"
@@ -37,12 +38,22 @@ public:
         m_gameTime.Reset();
         m_physicsSystem.Initialize();
 
-        OnInitialize(registry);
+        Scene& mainScene = m_sceneSystem.CreateScene("Main");
+        m_sceneSystem.SetActiveScene("Main");
+
+        OnInitialize(mainScene.registry);
 
         while (m_window.IsRunning())
         {
             m_window.PumpMessages();
             m_gameTime.Update();
+
+            Scene* activeScene = m_sceneSystem.GetActiveScene();
+
+            if (!activeScene)
+                continue;
+
+            entt::registry& registry = activeScene->registry;
 
             m_editorSystem.BeginFrame();
 
@@ -56,16 +67,19 @@ public:
             m_renderSystem.Update(viewProjection);
             m_renderSystem.BeginFrame();
 
-            Render();
+            Render(registry);
 
-            m_editorSystem.Draw(registry, m_animationSystem, m_assetSystem, m_sceneSystem, m_sceneSerializer);
+            m_editorSystem.Draw(m_animationSystem, m_assetSystem, m_sceneSystem, m_sceneSerializer);
 
             m_renderSystem.BeginEditor();
             m_editorSystem.EndFrame(m_renderSystem.CommandList());
             m_renderSystem.EndFrame();
         }
 
-        OnDestroy(registry);
+        Scene* activeScene = m_sceneSystem.GetActiveScene();
+
+        if (activeScene)
+            OnDestroy(activeScene->registry);
 
         m_editorSystem.Destroy();
         m_renderSystem.Destroy();
@@ -79,8 +93,19 @@ protected:
     PhysicsSystem& Physics() { return m_physicsSystem; }
     CameraSystem& Camera() { return m_cameraSystem; }
     AnimationSystem& Animations() { return m_animationSystem; }
-    SceneSystem& Scene() { return m_sceneSystem; }
+    SceneSystem& Scenes() { return m_sceneSystem; }
     SceneSerializer& Serializer() { return m_sceneSerializer; }
+
+    entt::entity CreateEntity(entt::registry& registry, const std::string& name)
+    {
+        entt::entity entity = registry.create();
+
+        registry.emplace<IDComponent>(entity, IDComponent{ GenerateEntityID() });
+        registry.emplace<NameComponent>(entity, NameComponent{ name });
+        registry.emplace<TransformComponent>(entity);
+
+        return entity;
+    }
 
     virtual void OnInitialize(entt::registry& registry) = 0;
     virtual void OnUpdate(entt::registry& registry, float deltaTime) = 0;
@@ -99,9 +124,7 @@ private:
     SceneSystem m_sceneSystem;
     SceneSerializer m_sceneSerializer;
 
-    entt::registry registry;
-
-    void Render()
+    void Render(entt::registry& registry)
     {
         std::unordered_map<Model*, std::vector<InstanceData>> batches;
 

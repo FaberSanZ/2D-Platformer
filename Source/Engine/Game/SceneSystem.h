@@ -1,49 +1,90 @@
 #pragma once
 
+#include <memory>
 #include <string>
+#include <unordered_map>
 #include <entt/entt.hpp>
-#include "Components.h"
+
+struct Scene
+{
+    std::string name;
+    entt::registry registry;
+};
 
 class SceneSystem
 {
 public:
-    entt::entity CreateEntity(entt::registry& registry, const std::string& name)
+    Scene& CreateScene(const std::string& name)
     {
-        return CreateEntity(registry, name, GenerateEntityID());
+        auto it = m_scenes.find(name);
+
+        if (it != m_scenes.end())
+            return *it->second;
+
+        auto scene = std::make_unique<Scene>();
+        scene->name = name;
+
+        Scene* result = scene.get();
+
+        m_scenes.emplace(name, std::move(scene));
+
+        if (!m_activeScene)
+            m_activeScene = result;
+
+        return *result;
     }
 
-    entt::entity CreateEntity(entt::registry& registry, const std::string& name, EntityID id)
+    bool DestroyScene(const std::string& name)
     {
-        entt::entity entity = registry.create();
+        auto it = m_scenes.find(name);
 
-        registry.emplace<IDComponent>(entity, IDComponent{ id });
-        registry.emplace<NameComponent>(entity, NameComponent{ name });
-        registry.emplace<TransformComponent>(entity);
+        if (it == m_scenes.end())
+            return false;
 
-        return entity;
+        bool wasActive = m_activeScene == it->second.get();
+
+        m_scenes.erase(it);
+
+        if (wasActive)
+            m_activeScene = m_scenes.empty() ? nullptr : m_scenes.begin()->second.get();
+
+        return true;
     }
 
-    void DestroyEntity(entt::registry& registry, entt::entity entity)
+    Scene* GetScene(const std::string& name)
     {
-        if (registry.valid(entity))
-            registry.destroy(entity);
+        auto it = m_scenes.find(name);
+        return it != m_scenes.end() ? it->second.get() : nullptr;
     }
 
-    void Clear(entt::registry& registry)
+    const Scene* GetScene(const std::string& name) const
     {
-        registry.clear();
+        auto it = m_scenes.find(name);
+        return it != m_scenes.end() ? it->second.get() : nullptr;
     }
 
-    entt::entity FindEntity(entt::registry& registry, EntityID id)
+    bool SetActiveScene(const std::string& name)
     {
-        auto view = registry.view<IDComponent>();
+        Scene* scene = GetScene(name);
 
-        for (auto [entity, component] : view.each())
-        {
-            if (component.id == id)
-                return entity;
-        }
+        if (!scene)
+            return false;
 
-        return entt::null;
+        m_activeScene = scene;
+        return true;
     }
+
+    Scene* GetActiveScene()
+    {
+        return m_activeScene;
+    }
+
+    const Scene* GetActiveScene() const
+    {
+        return m_activeScene;
+    }
+
+private:
+    std::unordered_map<std::string, std::unique_ptr<Scene>> m_scenes;
+    Scene* m_activeScene = nullptr;
 };
