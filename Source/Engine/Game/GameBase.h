@@ -107,6 +107,7 @@ protected:
         return entity;
     }
 
+
     virtual void OnInitialize(entt::registry& registry) = 0;
     virtual void OnUpdate(entt::registry& registry, float deltaTime) = 0;
     virtual void OnDestroy(entt::registry& registry) = 0;

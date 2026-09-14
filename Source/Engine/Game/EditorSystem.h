@@ -430,29 +430,37 @@ private:
         if (m_selectedEntity == entt::null || !registry.valid(m_selectedEntity))
             return;
 
+        DrawAddComponent(registry, serializer);
         DrawTransform(registry);
-        DrawAddComponent(registry);
-        DrawGameTags(registry, serializer);
         DrawModel(registry, assets);
         DrawCamera(registry);
+        DrawPrimaryCamera(registry);
+        DrawRigidBody(registry);
         DrawAnimation(registry, animations);
+        DrawGameComponents(registry, serializer);
     }
 
 
-    void DrawGameTags(entt::registry& registry, SceneSerializer& serializer)
+    void DrawGameComponents(entt::registry& registry, SceneSerializer& serializer)
     {
-        if (serializer.GetTagCount() == 0)
-            return;
-
-        ImGui::SeparatorText("Game Tags");
+        ImGui::PushID("RegisteredComponents");
 
         for (size_t i = 0; i < serializer.GetTagCount(); ++i)
         {
-            bool enabled = serializer.HasTag(i, registry, m_selectedEntity);
+            if (!serializer.HasTag(i, registry, m_selectedEntity))
+                continue;
 
-            if (ImGui::Checkbox(serializer.GetTagName(i).c_str(), &enabled))
-                serializer.SetTag(i, registry, m_selectedEntity, enabled);
+            const std::string& name = serializer.GetTagName(i);
+            ImGui::PushID(name.c_str());
+            ImGui::SeparatorText(name.c_str());
+
+            if (ImGui::Button("Remove Component"))
+                serializer.SetTag(i, registry, m_selectedEntity, false);
+
+            ImGui::PopID();
         }
+
+        ImGui::PopID();
     }
 
     void DrawEntity(entt::registry& registry)
@@ -493,7 +501,22 @@ private:
         ImGui::DragFloat3("Scale", &transform->scale.x, 0.01f, 0.001f, 100.0f);
     }
 
-    void DrawAddComponent(entt::registry& registry)
+    bool DrawComponentMenuItem(const char* name, bool present, bool allowed = true, const char* requirement = nullptr)
+    {
+        bool selected = ImGui::MenuItem(name, nullptr, false, !present && allowed);
+
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        {
+            if (present)
+                ImGui::SetTooltip("Already added.");
+            else if (!allowed && requirement)
+                ImGui::SetTooltip("%s", requirement);
+        }
+
+        return selected;
+    }
+
+    void DrawAddComponent(entt::registry& registry, SceneSerializer& serializer)
     {
         ImGui::Spacing();
 
@@ -503,21 +526,81 @@ private:
         if (!ImGui::BeginPopup("AddComponentPopup"))
             return;
 
-        bool hasModel = registry.any_of<ModelComponent>(m_selectedEntity);
-        bool hasCamera = registry.any_of<CameraComponent>(m_selectedEntity);
+        const bool hasID = registry.any_of<IDComponent>(m_selectedEntity);
+        const bool hasName = registry.any_of<NameComponent>(m_selectedEntity);
+        const bool hasTransform = registry.any_of<TransformComponent>(m_selectedEntity);
+        const bool hasModel = registry.any_of<ModelComponent>(m_selectedEntity);
+        const bool hasCamera = registry.any_of<CameraComponent>(m_selectedEntity);
+        const bool hasPrimaryCamera = registry.any_of<PrimaryCameraComponent>(m_selectedEntity);
+        const bool hasRigidBody = registry.any_of<RigidBodyComponent>(m_selectedEntity);
+        const bool hasAnimation = registry.any_of<AnimationComponent>(m_selectedEntity);
 
-        if (!hasModel && ImGui::MenuItem("Model"))
+        bool available = !hasID || !hasName || !hasTransform || !hasModel || !hasCamera || !hasRigidBody || !hasAnimation || (!hasPrimaryCamera && hasCamera);
+
+        // Core scene components stay visible, even when already present.
+        // ID, Name and Transform are retained because scene saving requires them.
+        if (DrawComponentMenuItem("ID", hasID))
+            registry.emplace<IDComponent>(m_selectedEntity, IDComponent{ GenerateEntityID() });
+
+        if (DrawComponentMenuItem("Name", hasName))
+        {
+            registry.emplace<NameComponent>(m_selectedEntity, NameComponent{ "Entity" });
+            std::snprintf(m_nameBuffer, sizeof(m_nameBuffer), "%s", "Entity");
+        }
+
+        if (DrawComponentMenuItem("Transform", hasTransform))
+            registry.emplace<TransformComponent>(m_selectedEntity);
+
+        if (DrawComponentMenuItem("Model", hasModel))
         {
             registry.emplace<ModelComponent>(m_selectedEntity);
             m_modelPathBuffer[0] = '\0';
             m_modelStatus.clear();
         }
 
-        if (!hasCamera && ImGui::MenuItem("Camera"))
+        if (DrawComponentMenuItem("Camera", hasCamera))
             registry.emplace<CameraComponent>(m_selectedEntity);
 
-        if (hasModel && hasCamera)
-            ImGui::TextDisabled("No components available.");
+        if (DrawComponentMenuItem("Primary Camera", hasPrimaryCamera, hasCamera, "Add a Camera component first."))
+        {
+            // Only one camera is primary in a scene.
+            registry.clear<PrimaryCameraComponent>();
+            registry.emplace<PrimaryCameraComponent>(m_selectedEntity);
+        }
+
+        if (DrawComponentMenuItem("Rigid Body", hasRigidBody))
+            registry.emplace<RigidBodyComponent>(m_selectedEntity);
+
+        if (DrawComponentMenuItem("Animation", hasAnimation))
+        {
+            registry.emplace<AnimationComponent>(m_selectedEntity);
+            m_selectedClip = 0;
+        }
+
+        ImGui::PushID("RegisteredComponents");
+
+        for (size_t i = 0; i < serializer.GetTagCount(); ++i)
+        {
+            const bool present = serializer.HasTag(i, registry, m_selectedEntity);
+            const std::string& name = serializer.GetTagName(i);
+
+            available = available || !present;
+
+            ImGui::PushID(name.c_str());
+
+            if (DrawComponentMenuItem(name.c_str(), present))
+                serializer.SetTag(i, registry, m_selectedEntity, true);
+
+            ImGui::PopID();
+        }
+
+        ImGui::PopID();
+
+        if (!available)
+        {
+            ImGui::Separator();
+            ImGui::TextDisabled("All components are already added.");
+        }
 
         ImGui::EndPopup();
     }
@@ -576,29 +659,6 @@ private:
         ImGui::DragFloat("Near Plane", &camera->nearPlane, 0.01f, 0.001f, 1000.0f);
         ImGui::DragFloat("Far Plane", &camera->farPlane, 1.0f, 0.01f, 100000.0f);
 
-        bool primary = registry.any_of<PrimaryCameraComponent>(m_selectedEntity);
-
-        if (ImGui::Checkbox("Primary Camera", &primary))
-        {
-            if (primary)
-            {
-                auto view = registry.view<PrimaryCameraComponent>();
-
-                for (entt::entity entity : view)
-                {
-                    if (entity != m_selectedEntity)
-                        registry.remove<PrimaryCameraComponent>(entity);
-                }
-
-                if (!registry.any_of<PrimaryCameraComponent>(m_selectedEntity))
-                    registry.emplace<PrimaryCameraComponent>(m_selectedEntity);
-            }
-            else
-            {
-                registry.remove<PrimaryCameraComponent>(m_selectedEntity);
-            }
-        }
-
         if (ImGui::Button("Remove Camera"))
         {
             registry.remove<CameraComponent>(m_selectedEntity);
@@ -608,24 +668,74 @@ private:
         }
     }
 
-    void DrawAnimation(entt::registry& registry, AnimationSystem& animations)
+    void DrawPrimaryCamera(entt::registry& registry)
     {
-        ModelComponent* modelComponent = registry.try_get<ModelComponent>(m_selectedEntity);
-
-        if (!modelComponent || !modelComponent->model)
+        if (!registry.any_of<PrimaryCameraComponent>(m_selectedEntity))
             return;
 
-        Model& model = *modelComponent->model;
+        ImGui::SeparatorText("Primary Camera");
+        ImGui::TextDisabled("Used to render this scene.");
 
-        if (model.animations.empty())
+        if (ImGui::Button("Remove Primary Camera"))
+            registry.remove<PrimaryCameraComponent>(m_selectedEntity);
+    }
+
+    void DrawRigidBody(entt::registry& registry)
+    {
+        RigidBodyComponent* body = registry.try_get<RigidBodyComponent>(m_selectedEntity);
+
+        if (!body)
+            return;
+
+        ImGui::SeparatorText("Rigid Body");
+
+        const char* types[] = { "Static", "Kinematic", "Dynamic" };
+        int type = static_cast<int>(body->type);
+
+        if (ImGui::Combo("Body Type", &type, types, IM_ARRAYSIZE(types)))
+            body->type = static_cast<BodyType>(type);
+
+        ImGui::DragFloat3("Linear Velocity", &body->linearVelocity.x, 0.05f);
+        ImGui::DragFloat3("Linear Acceleration", &body->linearAcceleration.x, 0.05f);
+
+        if (ImGui::Button("Remove Rigid Body"))
+            registry.remove<RigidBodyComponent>(m_selectedEntity);
+    }
+
+    void DrawAnimation(entt::registry& registry, AnimationSystem& animations)
+    {
+        AnimationComponent* animation = registry.try_get<AnimationComponent>(m_selectedEntity);
+
+        if (!animation)
             return;
 
         ImGui::SeparatorText("Animation");
 
+        if (ImGui::Button("Remove Animation"))
+        {
+            registry.remove<AnimationComponent>(m_selectedEntity);
+            m_selectedClip = 0;
+            return;
+        }
+
+        ModelComponent* modelComponent = registry.try_get<ModelComponent>(m_selectedEntity);
+
+        if (!modelComponent || !modelComponent->model)
+        {
+            ImGui::TextDisabled("Add and load a Model to select an animation clip.");
+            return;
+        }
+
+        Model& model = *modelComponent->model;
+
+        if (model.animations.empty())
+        {
+            ImGui::TextDisabled("This model has no animation clips.");
+            return;
+        }
+
         if (m_selectedClip >= model.animations.size())
             m_selectedClip = 0;
-
-        AnimationComponent* animation = registry.try_get<AnimationComponent>(m_selectedEntity);
 
         ImGui::Text("Clips: %u", static_cast<uint32_t>(model.animations.size()));
 

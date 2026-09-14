@@ -45,26 +45,30 @@ protected:
 
     void OnInitialize(entt::registry& registry) override
     {
+        // Register gameplay components before loading the scene.
         Serializer().RegisterTag<PlayerComponent>("Player");
         Serializer().RegisterTag<BossComponent>("Boss");
 
-        m_knightModel = Assets().LoadModel("../Assets/Models/KnightCharacter.glb");
-        m_spiderModel = Assets().LoadModel("../Assets/Models/Spider.glb");
+        Scene* activeScene = Scenes().GetActiveScene();
 
-        entt::entity player = CreateKnight(registry, { -4.0f, 0.0f, 0.0f });
-        entt::entity boss = CreateSpider(registry, { 4.0f, 0.0f, 0.0f });
-        CreateCamera(registry);
+        // Load entities and their model references from the scene file.
+        Serializer().Load(*activeScene, Assets(), "../Assets/Scenes/TestScene_RoundTrip.yaml");
 
-        auto& playerComponent = registry.get<PlayerComponent>(player);
-        auto& bossComponent = registry.get<BossComponent>(boss);
 
-        SetPlayerState(registry, player, playerComponent, PlayerState::Idle);
-        SetBossState(registry, boss, bossComponent, BossState::Idle);
+        auto& sceneRegistry = activeScene->registry;
+
+        auto players = sceneRegistry.view<PlayerComponent>();
+        for (auto [entity, player] : players.each())
+            SetPlayerState(sceneRegistry, entity, player, PlayerState::Idle);
+
+        auto bosses = sceneRegistry.view<BossComponent>();
+        for (auto [entity, boss] : bosses.each())
+            SetBossState(sceneRegistry, entity, boss, BossState::Idle);
 
         m_cameraYaw = DirectX::XMConvertToRadians(90.0f);
         m_cameraPitch = -0.22f;
 
-        UpdateThirdPersonCamera(registry);
+        UpdateThirdPersonCamera(sceneRegistry);
     }
 
     void OnUpdate(entt::registry& registry, float deltaTime) override

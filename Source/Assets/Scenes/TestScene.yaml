@@ -1,5 +1,16 @@
 Scene: TestScene
 Entities:
+  - Entity: 2128051046613989556
+    Name: camera
+    Transform:
+      Position: [1252.24622, 1665.04028, -1269.2832]
+      Rotation: [0.159839556, -0.375239909, 0.0658620447, 0.910663724]
+      Scale: [1, 1, 1]
+    Camera:
+      FieldOfView: 60
+      NearPlane: 0.100000001
+      FarPlane: 1000
+      Primary: true
   - Entity: 167741709497719144
     Name: spider
     Transform:
@@ -9,14 +20,4 @@ Entities:
     Model:
       Asset: ../Assets/Models/Spider.glb
       Color: [1, 1, 1, 1]
-  - Entity: 2128051046613989556
-    Name: camera
-    Transform:
-      Position: [0.349999994, 0.800000012, -8.10000038]
-      Rotation: [0.0900000036, 0, -0.0399999991, 1.26999998]
-      Scale: [1, 1, 1]
-    Camera:
-      FieldOfView: 60
-      NearPlane: 0.100000001
-      FarPlane: 1000
-      Primary: true
+    Boss: true
