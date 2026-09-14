@@ -22,10 +22,9 @@ struct InstanceData
 
 struct DirectionalLight
 {
-    DirectX::XMFLOAT4 direction{ 0.35f, -0.55f, 0.75f, 0.0f };
-    DirectX::XMFLOAT4 colorIntensity{ 1.0f, 1.0f, 1.0f, 3.0f };
+    DirectX::XMFLOAT4 direction{ 0.35f, -0.75f, 0.55f, 0.0f };
+    DirectX::XMFLOAT4 colorIntensity{ 1.0f, 0.98f, 0.94f, 0.9f };
 };
-
 class RenderSystem
 {
 public:

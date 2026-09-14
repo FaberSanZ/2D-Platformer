@@ -63,14 +63,6 @@ struct PrimaryCameraComponent
 {
 };
 
-struct PlayerComponent
-{
-};
-
-struct BossComponent
-{
-};
-
 struct Model;
 
 struct ModelComponent

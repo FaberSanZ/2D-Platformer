@@ -1,7 +1,9 @@
 #pragma once
 
 #include <fstream>
+#include <functional>
 #include <string>
+#include <vector>
 #include <entt/entt.hpp>
 #include <yaml-cpp/yaml.h>
 #include "Components.h"
@@ -11,6 +13,30 @@
 class SceneSerializer
 {
 public:
+    template<typename T>
+    void RegisterTag(const std::string& name)
+    {
+        for (const TagBinding& tag : m_tags)
+        {
+            if (tag.name == name)
+                return;
+        }
+
+        TagBinding tag{};
+        tag.name = name;
+        tag.has = [](const entt::registry& registry, entt::entity entity)
+            {
+                return registry.any_of<T>(entity);
+            };
+        tag.add = [](entt::registry& registry, entt::entity entity)
+            {
+                if (!registry.any_of<T>(entity))
+                    registry.emplace<T>(entity);
+            };
+
+        m_tags.push_back(std::move(tag));
+    }
+
     bool Save(const entt::registry& registry, const std::string& filePath, const std::string& sceneName)
     {
         YAML::Emitter out;
@@ -52,11 +78,11 @@ public:
                 out << YAML::EndMap;
             }
 
-            if (registry.any_of<PlayerComponent>(entity))
-                out << YAML::Key << "Player" << YAML::Value << true;
-
-            if (registry.any_of<BossComponent>(entity))
-                out << YAML::Key << "Boss" << YAML::Value << true;
+            for (const TagBinding& tag : m_tags)
+            {
+                if (tag.has(registry, entity))
+                    out << YAML::Key << tag.name << YAML::Value << true;
+            }
 
             out << YAML::EndMap;
         }
@@ -144,11 +170,13 @@ public:
                         registry.emplace<PrimaryCameraComponent>(entity);
                 }
 
-                if (entityNode["Player"] && entityNode["Player"].as<bool>())
-                    registry.emplace<PlayerComponent>(entity);
+                for (const TagBinding& tag : m_tags)
+                {
+                    YAML::Node tagNode = entityNode[tag.name];
 
-                if (entityNode["Boss"] && entityNode["Boss"].as<bool>())
-                    registry.emplace<BossComponent>(entity);
+                    if (tagNode && tagNode.as<bool>())
+                        tag.add(registry, entity);
+                }
             }
         }
         catch (const YAML::Exception&)
@@ -161,6 +189,15 @@ public:
     }
 
 private:
+    struct TagBinding
+    {
+        std::string name;
+        std::function<bool(const entt::registry&, entt::entity)> has;
+        std::function<void(entt::registry&, entt::entity)> add;
+    };
+
+    std::vector<TagBinding> m_tags;
+
     static void WriteFloat3(YAML::Emitter& out, const char* name, const DirectX::XMFLOAT3& value)
     {
         out << YAML::Key << name << YAML::Value << YAML::Flow << YAML::BeginSeq << value.x << value.y << value.z << YAML::EndSeq;

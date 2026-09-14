@@ -51,18 +51,14 @@ public:
             m_physicsSystem.Update(registry, m_gameTime.GetDeltaTime());
 
             float aspectRatio = static_cast<float>(m_window.ClientWidth()) / static_cast<float>(m_window.ClientHeight());
-
             DirectX::XMMATRIX viewProjection = m_cameraSystem.GetViewProjection(registry, aspectRatio);
-            m_renderSystem.Update(viewProjection);
 
+            m_renderSystem.Update(viewProjection);
             m_renderSystem.BeginFrame();
 
             Render();
 
-            EditorSceneAction sceneAction = m_editorSystem.Draw(registry, m_animationSystem, m_assetSystem, m_sceneSystem, m_sceneSerializer);
-
-            if (sceneAction != EditorSceneAction::None)
-                OnSceneChanged(registry);
+            m_editorSystem.Draw(registry, m_animationSystem, m_assetSystem, m_sceneSystem, m_sceneSerializer);
 
             m_renderSystem.BeginEditor();
             m_editorSystem.EndFrame(m_renderSystem.CommandList());
@@ -89,7 +85,6 @@ protected:
     virtual void OnInitialize(entt::registry& registry) = 0;
     virtual void OnUpdate(entt::registry& registry, float deltaTime) = 0;
     virtual void OnDestroy(entt::registry& registry) = 0;
-    virtual void OnSceneChanged(entt::registry& registry) {}
 
 private:
     GameWindow m_window;

@@ -1,10 +1,10 @@
-#include <iostream>
 #include <algorithm>
 #include <cmath>
 #include "GameBase.h"
 
 enum class PlayerState
 {
+    None,
     Idle,
     Walk,
     Run,
@@ -15,10 +15,26 @@ enum class PlayerState
 
 enum class BossState
 {
+    None,
     Idle,
     Chase,
     Attack,
     Death
+};
+
+struct PlayerComponent
+{
+    PlayerState state = PlayerState::None;
+    DirectX::XMFLOAT3 rollDirection{ 0.0f, 0.0f, 1.0f };
+    bool previousAttack = false;
+    bool previousRoll = false;
+    bool previousDeath = false;
+};
+
+struct BossComponent
+{
+    BossState state = BossState::None;
+    float attackCooldown = 0.0f;
 };
 
 class Game final : public GameBase
@@ -27,31 +43,26 @@ protected:
     Model* m_knightModel = nullptr;
     Model* m_spiderModel = nullptr;
 
-    entt::entity m_player = entt::null;
-    entt::entity m_boss = entt::null;
-    entt::entity m_camera = entt::null;
-
     void OnInitialize(entt::registry& registry) override
     {
+        Serializer().RegisterTag<PlayerComponent>("Player");
+        Serializer().RegisterTag<BossComponent>("Boss");
+
         m_knightModel = Assets().LoadModel("../Assets/Models/KnightCharacter.glb");
         m_spiderModel = Assets().LoadModel("../Assets/Models/Spider.glb");
 
-        m_player = CreateKnight(registry, { -4.0f, 0.0f, 0.0f });
-        m_boss = CreateSpider(registry, { 4.0f, 0.0f, 0.0f });
+        entt::entity player = CreateKnight(registry, { -4.0f, 0.0f, 0.0f });
+        entt::entity boss = CreateSpider(registry, { 4.0f, 0.0f, 0.0f });
+        CreateCamera(registry);
 
-        m_camera = Scene().CreateEntity(registry, "Camera");
+        auto& playerComponent = registry.get<PlayerComponent>(player);
+        auto& bossComponent = registry.get<BossComponent>(boss);
 
-        auto& cameraTransform = registry.get<TransformComponent>(m_camera);
-        cameraTransform.position = { -10.0f, 3.0f, 0.0f };
-
-        registry.emplace<CameraComponent>(m_camera);
-        registry.emplace<PrimaryCameraComponent>(m_camera);
+        SetPlayerState(registry, player, playerComponent, PlayerState::Idle);
+        SetBossState(registry, boss, bossComponent, BossState::Idle);
 
         m_cameraYaw = DirectX::XMConvertToRadians(90.0f);
         m_cameraPitch = -0.22f;
-
-        SetPlayerState(registry, PlayerState::Idle);
-        SetBossState(registry, BossState::Idle);
 
         UpdateThirdPersonCamera(registry);
     }
@@ -62,49 +73,6 @@ protected:
         UpdatePlayer(registry, deltaTime);
         UpdateBoss(registry, deltaTime);
         UpdateThirdPersonCamera(registry);
-
-        m_previousAttack = GameInput::IsMouseButtonDown(GameInput::MouseButton::Left);
-        m_previousRoll = GameInput::IsKeyDown(GameInput::KeyCode::Space);
-        m_previousDeath = GameInput::IsKeyDown(GameInput::KeyCode::T);
-    }
-
-
-    void OnSceneChanged(entt::registry& registry) override
-    {
-        m_player = entt::null;
-        m_boss = entt::null;
-        m_camera = entt::null;
-
-        auto playerView = registry.view<PlayerComponent>();
-
-        if (playerView.begin() != playerView.end())
-            m_player = *playerView.begin();
-
-        auto bossView = registry.view<BossComponent>();
-
-        if (bossView.begin() != bossView.end())
-            m_boss = *bossView.begin();
-
-        auto cameraView = registry.view<PrimaryCameraComponent>();
-
-        if (cameraView.begin() != cameraView.end())
-            m_camera = *cameraView.begin();
-
-        m_playerState = PlayerState::Death;
-        m_bossState = BossState::Death;
-
-        if (m_player != entt::null)
-            SetPlayerState(registry, PlayerState::Idle);
-
-        if (m_boss != entt::null)
-            SetBossState(registry, BossState::Idle);
-
-        m_previousAttack = GameInput::IsMouseButtonDown(GameInput::MouseButton::Left);
-        m_previousRoll = GameInput::IsKeyDown(GameInput::KeyCode::Space);
-        m_previousDeath = GameInput::IsKeyDown(GameInput::KeyCode::T);
-
-        if (m_player != entt::null && m_camera != entt::null)
-            UpdateThirdPersonCamera(registry);
     }
 
     void OnDestroy(entt::registry& registry) override
@@ -153,201 +121,233 @@ private:
         return entity;
     }
 
-    void SetPlayerState(entt::registry& registry, PlayerState state)
+    entt::entity CreateCamera(entt::registry& registry)
     {
-        if (m_playerState == state)
+        entt::entity entity = Scene().CreateEntity(registry, "Camera");
+
+        auto& transform = registry.get<TransformComponent>(entity);
+        transform.position = { -10.0f, 3.0f, 0.0f };
+
+        registry.emplace<CameraComponent>(entity);
+        registry.emplace<PrimaryCameraComponent>(entity);
+
+        return entity;
+    }
+
+    void SetPlayerState(entt::registry& registry, entt::entity entity, PlayerComponent& player, PlayerState state)
+    {
+        if (player.state == state)
             return;
 
-        m_playerState = state;
+        player.state = state;
 
         switch (state)
         {
-        case PlayerState::Idle: Animations().Play(registry, m_player, "Idle", true, 0.25f); break;
-        case PlayerState::Walk: Animations().Play(registry, m_player, "Walking", true, 0.25f); break;
-        case PlayerState::Run: Animations().Play(registry, m_player, "Run", true, 0.20f); break;
-        case PlayerState::Roll: Animations().Play(registry, m_player, "Roll", false, 0.08f); break;
-        case PlayerState::Attack: Animations().Play(registry, m_player, "swordAttackJump", false, 0.10f); break;
-        case PlayerState::Death: Animations().Play(registry, m_player, "Death", false, 0.20f); break;
+        case PlayerState::Idle: Animations().Play(registry, entity, "Idle", true, 0.25f); break;
+        case PlayerState::Walk: Animations().Play(registry, entity, "Walking", true, 0.25f); break;
+        case PlayerState::Run: Animations().Play(registry, entity, "Run", true, 0.20f); break;
+        case PlayerState::Roll: Animations().Play(registry, entity, "Roll", false, 0.08f); break;
+        case PlayerState::Attack: Animations().Play(registry, entity, "swordAttackJump", false, 0.10f); break;
+        case PlayerState::Death: Animations().Play(registry, entity, "Death", false, 0.20f); break;
+        case PlayerState::None: break;
         }
     }
 
-    void SetBossState(entt::registry& registry, BossState state)
+    void SetBossState(entt::registry& registry, entt::entity entity, BossComponent& boss, BossState state)
     {
-        if (m_bossState == state)
+        if (boss.state == state)
             return;
 
-        m_bossState = state;
+        boss.state = state;
 
         switch (state)
         {
-        case BossState::Idle: Animations().Play(registry, m_boss, "SpiderArmature|Spider_Idle", true, 0.18f); break;
-        case BossState::Chase: Animations().Play(registry, m_boss, "SpiderArmature|Spider_Walk", true, 0.12f); break;
-        case BossState::Attack: Animations().Play(registry, m_boss, "SpiderArmature|Spider_Attack", false, 0.08f); break;
-        case BossState::Death: Animations().Play(registry, m_boss, "SpiderArmature|Spider_Death", false, 0.20f); break;
+        case BossState::Idle: Animations().Play(registry, entity, "SpiderArmature|Spider_Idle", true, 0.18f); break;
+        case BossState::Chase: Animations().Play(registry, entity, "SpiderArmature|Spider_Walk", true, 0.12f); break;
+        case BossState::Attack: Animations().Play(registry, entity, "SpiderArmature|Spider_Attack", false, 0.08f); break;
+        case BossState::Death: Animations().Play(registry, entity, "SpiderArmature|Spider_Death", false, 0.20f); break;
+        case BossState::None: break;
         }
     }
 
     void UpdatePlayer(entt::registry& registry, float deltaTime)
     {
-        if (m_player == entt::null)
-            return;
+        auto view = registry.view<PlayerComponent, TransformComponent>();
 
-        TransformComponent* transform = registry.try_get<TransformComponent>(m_player);
-
-        if (!transform)
-            return;
-
-        bool attackDown = GameInput::IsMouseButtonDown(GameInput::MouseButton::Left);
-        bool rollDown = GameInput::IsKeyDown(GameInput::KeyCode::Space);
-        bool deathDown = GameInput::IsKeyDown(GameInput::KeyCode::T);
-
-        bool attackPressed = attackDown && !m_previousAttack;
-        bool rollPressed = rollDown && !m_previousRoll;
-        bool deathPressed = deathDown && !m_previousDeath;
-
-        if (deathPressed)
+        for (auto [entity, player, transform] : view.each())
         {
-            SetPlayerState(registry, PlayerState::Death);
-            return;
-        }
+            bool attackDown = GameInput::IsMouseButtonDown(GameInput::MouseButton::Left);
+            bool rollDown = GameInput::IsKeyDown(GameInput::KeyCode::Space);
+            bool deathDown = GameInput::IsKeyDown(GameInput::KeyCode::T);
 
-        if (m_playerState == PlayerState::Death)
-            return;
-
-        if (m_playerState == PlayerState::Roll)
-        {
-            if (!Animations().Finished(registry, m_player))
+            if (player.state == PlayerState::None)
             {
-                transform->position.x += m_rollDirection.x * m_rollSpeed * deltaTime;
-                transform->position.z += m_rollDirection.z * m_rollSpeed * deltaTime;
-                return;
+                player.previousAttack = attackDown;
+                player.previousRoll = rollDown;
+                player.previousDeath = deathDown;
+                SetPlayerState(registry, entity, player, PlayerState::Idle);
+                continue;
             }
 
-            SetPlayerState(registry, PlayerState::Idle);
-        }
+            bool attackPressed = attackDown && !player.previousAttack;
+            bool rollPressed = rollDown && !player.previousRoll;
+            bool deathPressed = deathDown && !player.previousDeath;
 
-        if (m_playerState == PlayerState::Attack)
-        {
-            if (!Animations().Finished(registry, m_player))
-                return;
+            player.previousAttack = attackDown;
+            player.previousRoll = rollDown;
+            player.previousDeath = deathDown;
 
-            SetPlayerState(registry, PlayerState::Idle);
-        }
-
-        DirectX::XMFLOAT3 movementDirection = GetMovementDirection();
-
-        bool moving = movementDirection.x != 0.0f || movementDirection.z != 0.0f;
-
-        if (attackPressed)
-        {
-            SetPlayerState(registry, PlayerState::Attack);
-            return;
-        }
-
-        if (rollPressed)
-        {
-            if (moving)
+            if (deathPressed)
             {
-                m_rollDirection = movementDirection;
-            }
-            else
-            {
-                DirectX::XMVECTOR rotation = DirectX::XMLoadFloat4(&transform->rotation);
-                DirectX::XMVECTOR forward = DirectX::XMVector3Rotate(DirectX::XMVectorSet(0, 0, 1, 0), rotation);
-
-                DirectX::XMStoreFloat3(&m_rollDirection, forward);
-
-                m_rollDirection.y = 0.0f;
-
-                NormalizeDirection(m_rollDirection);
+                SetPlayerState(registry, entity, player, PlayerState::Death);
+                continue;
             }
 
-            FaceDirection(*transform, m_rollDirection, deltaTime, 14.0f);
+            if (player.state == PlayerState::Death)
+                continue;
 
-            SetPlayerState(registry, PlayerState::Roll);
+            if (player.state == PlayerState::Roll)
+            {
+                if (!Animations().Finished(registry, entity))
+                {
+                    transform.position.x += player.rollDirection.x * m_rollSpeed * deltaTime;
+                    transform.position.z += player.rollDirection.z * m_rollSpeed * deltaTime;
+                    continue;
+                }
 
-            return;
+                SetPlayerState(registry, entity, player, PlayerState::Idle);
+            }
+
+            if (player.state == PlayerState::Attack)
+            {
+                if (!Animations().Finished(registry, entity))
+                    continue;
+
+                SetPlayerState(registry, entity, player, PlayerState::Idle);
+            }
+
+            DirectX::XMFLOAT3 movementDirection = GetMovementDirection();
+            bool moving = movementDirection.x != 0.0f || movementDirection.z != 0.0f;
+
+            if (attackPressed)
+            {
+                SetPlayerState(registry, entity, player, PlayerState::Attack);
+                continue;
+            }
+
+            if (rollPressed)
+            {
+                if (moving)
+                {
+                    player.rollDirection = movementDirection;
+                }
+                else
+                {
+                    DirectX::XMVECTOR rotation = DirectX::XMLoadFloat4(&transform.rotation);
+                    DirectX::XMVECTOR forward = DirectX::XMVector3Rotate(DirectX::XMVectorSet(0, 0, 1, 0), rotation);
+
+                    DirectX::XMStoreFloat3(&player.rollDirection, forward);
+
+                    player.rollDirection.y = 0.0f;
+
+                    NormalizeDirection(player.rollDirection);
+                }
+
+                FaceDirection(transform, player.rollDirection, deltaTime, 14.0f);
+                SetPlayerState(registry, entity, player, PlayerState::Roll);
+                continue;
+            }
+
+            if (!moving)
+            {
+                SetPlayerState(registry, entity, player, PlayerState::Idle);
+                continue;
+            }
+
+            bool running = GameInput::IsKeyDown(GameInput::KeyCode::Shift);
+            float speed = running ? m_runSpeed : m_walkSpeed;
+
+            transform.position.x += movementDirection.x * speed * deltaTime;
+            transform.position.z += movementDirection.z * speed * deltaTime;
+
+            FaceDirection(transform, movementDirection, deltaTime, m_playerRotationSpeed);
+            SetPlayerState(registry, entity, player, running ? PlayerState::Run : PlayerState::Walk);
         }
-
-        if (!moving)
-        {
-            SetPlayerState(registry, PlayerState::Idle);
-            return;
-        }
-
-        bool running = GameInput::IsKeyDown(GameInput::KeyCode::Shift);
-
-        float speed = running ? m_runSpeed : m_walkSpeed;
-
-        transform->position.x += movementDirection.x * speed * deltaTime;
-        transform->position.z += movementDirection.z * speed * deltaTime;
-
-        FaceDirection(*transform, movementDirection, deltaTime, m_playerRotationSpeed);
-
-        SetPlayerState(registry, running ? PlayerState::Run : PlayerState::Walk);
     }
 
     void UpdateBoss(entt::registry& registry, float deltaTime)
     {
-        if (m_boss == entt::null || m_player == entt::null)
+        auto playerView = registry.view<PlayerComponent, TransformComponent>();
+
+        if (playerView.begin() == playerView.end())
             return;
 
-        TransformComponent* bossTransform = registry.try_get<TransformComponent>(m_boss);
-        TransformComponent* playerTransform = registry.try_get<TransformComponent>(m_player);
+        entt::entity playerEntity = *playerView.begin();
+        const TransformComponent& playerTransform = registry.get<TransformComponent>(playerEntity);
 
-        if (!bossTransform || !playerTransform || m_bossState == BossState::Death)
-            return;
+        auto bossView = registry.view<BossComponent, TransformComponent>();
 
-        if (m_bossAttackCooldown > 0.0f)
-            m_bossAttackCooldown -= deltaTime;
-
-        if (m_bossState == BossState::Attack)
+        for (auto [entity, boss, transform] : bossView.each())
         {
-            if (!Animations().Finished(registry, m_boss))
-                return;
+            if (boss.state == BossState::None)
+            {
+                SetBossState(registry, entity, boss, BossState::Idle);
+                continue;
+            }
 
-            m_bossAttackCooldown = 0.8f;
+            if (boss.state == BossState::Death)
+                continue;
 
-            SetBossState(registry, BossState::Idle);
+            if (boss.attackCooldown > 0.0f)
+                boss.attackCooldown -= deltaTime;
+
+            if (boss.state == BossState::Attack)
+            {
+                if (!Animations().Finished(registry, entity))
+                    continue;
+
+                boss.attackCooldown = 0.8f;
+                SetBossState(registry, entity, boss, BossState::Idle);
+            }
+
+            DirectX::XMFLOAT3 direction
+            {
+                playerTransform.position.x - transform.position.x,
+                0.0f,
+                playerTransform.position.z - transform.position.z
+            };
+
+            float distance = std::sqrt(direction.x * direction.x + direction.z * direction.z);
+
+            if (distance > m_bossDetectionRange)
+            {
+                SetBossState(registry, entity, boss, BossState::Idle);
+                continue;
+            }
+
+            if (distance > 0.0001f)
+            {
+                direction.x /= distance;
+                direction.z /= distance;
+
+                FaceDirection(transform, direction, deltaTime, m_bossRotationSpeed);
+            }
+
+            if (distance <= m_bossAttackRange)
+            {
+                if (boss.attackCooldown <= 0.0f)
+                    SetBossState(registry, entity, boss, BossState::Attack);
+                else
+                    SetBossState(registry, entity, boss, BossState::Idle);
+
+                continue;
+            }
+
+            transform.position.x += direction.x * m_bossMoveSpeed * deltaTime;
+            transform.position.z += direction.z * m_bossMoveSpeed * deltaTime;
+
+            SetBossState(registry, entity, boss, BossState::Chase);
         }
-
-        DirectX::XMFLOAT3 direction
-        {
-            playerTransform->position.x - bossTransform->position.x,
-            0.0f,
-            playerTransform->position.z - bossTransform->position.z
-        };
-
-        float distance = std::sqrt(direction.x * direction.x + direction.z * direction.z);
-
-        if (distance > m_bossDetectionRange)
-        {
-            SetBossState(registry, BossState::Idle);
-            return;
-        }
-
-        if (distance > 0.0001f)
-        {
-            direction.x /= distance;
-            direction.z /= distance;
-
-            FaceDirection(*bossTransform, direction, deltaTime, m_bossRotationSpeed);
-        }
-
-        if (distance <= m_bossAttackRange)
-        {
-            if (m_bossAttackCooldown <= 0.0f)
-                SetBossState(registry, BossState::Attack);
-            else
-                SetBossState(registry, BossState::Idle);
-
-            return;
-        }
-
-        bossTransform->position.x += direction.x * m_bossMoveSpeed * deltaTime;
-        bossTransform->position.z += direction.z * m_bossMoveSpeed * deltaTime;
-
-        SetBossState(registry, BossState::Chase);
     }
 
     DirectX::XMFLOAT3 GetMovementDirection()
@@ -429,48 +429,47 @@ private:
 
     void UpdateThirdPersonCamera(entt::registry& registry)
     {
-        TransformComponent* playerTransform = registry.try_get<TransformComponent>(m_player);
-        TransformComponent* cameraTransform = registry.try_get<TransformComponent>(m_camera);
+        auto playerView = registry.view<PlayerComponent, TransformComponent>();
 
-        if (!playerTransform || !cameraTransform)
+        if (playerView.begin() == playerView.end())
             return;
 
-        DirectX::XMVECTOR target = DirectX::XMVectorSet(playerTransform->position.x, playerTransform->position.y + m_cameraTargetHeight, playerTransform->position.z, 1.0f);
+        auto cameraView = registry.view<PrimaryCameraComponent, TransformComponent>();
+
+        if (cameraView.begin() == cameraView.end())
+            return;
+
+        entt::entity playerEntity = *playerView.begin();
+        entt::entity cameraEntity = *cameraView.begin();
+
+        const TransformComponent& playerTransform = registry.get<TransformComponent>(playerEntity);
+        TransformComponent& cameraTransform = registry.get<TransformComponent>(cameraEntity);
+
+        DirectX::XMVECTOR target = DirectX::XMVectorSet(playerTransform.position.x, playerTransform.position.y + m_cameraTargetHeight, playerTransform.position.z, 1.0f);
         DirectX::XMVECTOR cameraRotation = DirectX::XMQuaternionRotationRollPitchYaw(m_cameraPitch, m_cameraYaw, 0.0f);
         DirectX::XMVECTOR forward = DirectX::XMVector3Rotate(DirectX::XMVectorSet(0, 0, 1, 0), cameraRotation);
         DirectX::XMVECTOR cameraPosition = DirectX::XMVectorSubtract(target, DirectX::XMVectorScale(forward, m_cameraDistance));
 
-        DirectX::XMStoreFloat3(&cameraTransform->position, cameraPosition);
-        DirectX::XMStoreFloat4(&cameraTransform->rotation, cameraRotation);
+        DirectX::XMStoreFloat3(&cameraTransform.position, cameraPosition);
+        DirectX::XMStoreFloat4(&cameraTransform.rotation, cameraRotation);
     }
 
 private:
-    PlayerState m_playerState = PlayerState::Death;
-    BossState m_bossState = BossState::Death;
-
     float m_walkSpeed = 3.0f;
     float m_runSpeed = 15.0f;
     float m_rollSpeed = 8.0f;
-
     float m_playerRotationSpeed = 8.0f;
 
     float m_bossMoveSpeed = 2.2f;
     float m_bossRotationSpeed = 5.0f;
     float m_bossDetectionRange = 12.0f;
     float m_bossAttackRange = 2.3f;
-    float m_bossAttackCooldown = 0.0f;
-
-    DirectX::XMFLOAT3 m_rollDirection{ 0.0f, 0.0f, 1.0f };
 
     float m_cameraYaw = 0.0f;
     float m_cameraPitch = 0.0f;
     float m_cameraDistance = 10.0f;
     float m_cameraTargetHeight = 5.4f;
     float m_cameraSensitivity = 0.0025f;
-
-    bool m_previousAttack = false;
-    bool m_previousRoll = false;
-    bool m_previousDeath = false;
 };
 
 int main()

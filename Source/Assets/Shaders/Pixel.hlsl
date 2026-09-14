@@ -1,5 +1,3 @@
-#define PI 3.14159265359f
-
 struct InstanceData
 {
     float4x4 World;
@@ -22,9 +20,9 @@ struct PixelInputType
     nointerpolation uint InstanceId : TEXCOORD2;
 };
 
-float Fd_Lambert()
+float3 LinearToSRGB(float3 color)
 {
-    return 1.0f / PI;
+    return pow(saturate(color), 1.0f / 2.2f);
 }
 
 float4 PS(PixelInputType input) : SV_TARGET
@@ -35,12 +33,19 @@ float4 PS(PixelInputType input) : SV_TARGET
     float3 l = normalize(-LightDirection.xyz);
 
     float NoL = saturate(dot(n, l));
+    float3 baseColor = instance.BaseColor.rgb;
 
-    float3 diffuseColor = instance.BaseColor.rgb;
-    float3 Fd = diffuseColor * Fd_Lambert();
+    float3 direct = baseColor * LightColorIntensity.rgb * LightColorIntensity.a * NoL;
 
-    float3 radiance = LightColorIntensity.rgb * LightColorIntensity.a;
-    float3 color = Fd * radiance * NoL;
+    float hemisphere = n.y * 0.5f + 0.5f;
 
-    return float4(color, instance.BaseColor.a);
+    float3 groundColor = float3(0.10f, 0.08f, 0.06f);
+    float3 skyColor = float3(0.34f, 0.38f, 0.44f);
+
+    float3 ambientLight = lerp(groundColor, skyColor, hemisphere);
+    float3 ambient = baseColor * ambientLight;
+
+    float3 color = direct + ambient;
+
+    return float4(LinearToSRGB(color), instance.BaseColor.a);
 }
